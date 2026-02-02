@@ -107,36 +107,47 @@ def main():
             print("Site pos (sim):", marker, site_pos_sim)
     '''
 
-    site_name = "l_shoulder_pos"
-    site_id = mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, site_name)
+    site_shoulder = "l_shoulder_pos"
+    site_ankle = "r_ankle_pos"
+
+    site_id_sh = mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, site_shoulder)
+    site_id_an = mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, site_ankle)
 
     # Jacobian
-    J_pos = np.zeros((3, model_mj.nv))
-    J_rot = np.zeros((3, model_mj.nv))
+    Jp_sh = np.zeros((3, model_mj.nv))
+    Jr_sh = np.zeros((3, model_mj.nv))
 
-    marker_id = data.columns.get_loc(site_name + '_X')
-    print(marker_id)
+    Jp_an = np.zeros((3, model_mj.nv))
+    Jr_an = np.zeros((3, model_mj.nv))
 
+    marker_id_sh = data.columns.get_loc(site_shoulder + '_X')
+    marker_id_an = data.columns.get_loc(site_ankle + '_X')
+    print(marker_id_sh, marker_id_an)
 
     def mocap_l_shoulder(t):
-        return data.iloc[t, marker_id:marker_id + 3].to_numpy()
+        return data.iloc[t, marker_id_sh:marker_id_sh + 3].to_numpy()
 
-    def site_error(data, site_id, target):
-        return target - data.site_xpos[site_id]
+    def mocap_r_ankle(t):
+        return data.iloc[t, marker_id_an:marker_id_an + 3].to_numpy()
 
-    def ik_step(model, data, site_id, target, step_size=0.5, damping=1e-4):
+
+    def ik_step_multi(model, data, target_sh, target_an, step_size=0.5, damping=1e-4):
         mj.mj_forward(model, data)
 
-        e = site_error(data, site_id, target)
+        e_sh = target_sh - data.site_xpos[site_id_sh]
+        e_an = target_an - data.site_xpos[site_id_an]
 
         # Jacobian
-        mj.mj_jacSite(model, data, J_pos, J_rot, site_id)
+        mj.mj_jacSite(model, data, Jp_sh, Jr_sh, site_id_sh)
+        mj.mj_jacSite(model, data, Jp_an, Jr_an, site_id_an)
 
-        # Damped least squares:
-        # dq = Jᵀ (J Jᵀ + λI)⁻¹ e
-        JJt = J_pos @ J_pos.T
-        dq = J_pos.T @ np.linalg.solve(
-            JJt + damping * np.eye(3),
+        e = np.concatenate([e_sh, e_an], axis=0)
+        J = np.vstack([Jp_sh, Jp_an])
+
+        # Damped least squares
+        JJt = J @ J.T
+        dq = J.T @ np.linalg.solve(
+            JJt + damping * np.eye(6),
             e
         )
 
@@ -144,9 +155,9 @@ def main():
 
         return np.linalg.norm(e)
 
-    def solve_one_frame(model, data, site_id, target, n_iter=20, tol=1e-4):
+    def solve_one_frame_multi(model, data, target_sh, target_an, n_iter=20, tol=1e-4):
         for i in range(n_iter):
-            err = ik_step(model, data, site_id, target)
+            err = ik_step_multi(model, data, target_sh, target_an)
             if err < tol:
                 break
 
@@ -154,14 +165,18 @@ def main():
     mj.mj_forward(model_mj, data_mj)
 
     t = 0
-    target = mocap_l_shoulder(t)
+    target_sh = mocap_l_shoulder(t)
+    target_an = mocap_r_ankle(t)
 
-    solve_one_frame(model_mj, data_mj, site_id, target)
+    solve_one_frame_multi(model_mj, data_mj, target_sh, target_an)
 
-    print("Target:", target)
-    print("Model :", data_mj.site_xpos[site_id])
+    print("Shoulder target:", target_sh)
+    print("Shoulder model :", data_mj.site_xpos[site_id_sh])
 
-    T_test = 1000
+    print("Ankle target:", target_an)
+    print("Ankle model :", data_mj.site_xpos[site_id_an])
+
+    T_test = 2000
     qpos_traj = np.zeros((T_test, model_mj.nq))
 
     data_mj.qpos[:] = 0
@@ -169,9 +184,17 @@ def main():
 
     for t in range(T_test):
         print("Frejm", t)
-        target = mocap_l_shoulder(t)
-        solve_one_frame(model_mj, data_mj, site_id, target)
+        target_sh = mocap_l_shoulder(t)
+        target_an = mocap_r_ankle(t)
+
+        solve_one_frame_multi(model_mj, data_mj, target_sh, target_an)
         qpos_traj[t] = data_mj.qpos.copy()
+
+    print("Shoulder target:", target_sh)
+    print("Shoulder model :", data_mj.site_xpos[site_id_sh])
+
+    print("Ankle target:", target_an)
+    print("Ankle model :", data_mj.site_xpos[site_id_an])
 
     import time
     import mujoco.viewer
