@@ -20,9 +20,20 @@ def main():
     joint_names = get_names(data)
     # print(joint_names)
 
+    x_min = data.filter(regex=r'_X$').min().min()
+    x_max = data.filter(regex=r'_X$').max().max()
+
+    y_min = data.filter(regex=r'_Y$').min().min()
+    y_max = data.filter(regex=r'_Y$').max().max()
+
+    z_min = 0.0
+    z_max = data.filter(regex=r'_Z$').max().max()
+    z_max = z_max * 5/4
+
+
+
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-
     for joint in joint_names:
         x = data[f'{joint}_X'][900]
         y = data[f'{joint}_Y'][900]
@@ -32,9 +43,31 @@ def main():
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_zlabel('z')
-    ax.set_aspect("equal")
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min, y_max)
+    ax.set_zlim(z_min, z_max)
+    #ax.set_aspect("equal")
     ax.view_init(elev=0, azim=0)
     plt.show()
+
+    for joint in joint_names:
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        x = data[f'{joint}_X']
+        y = data[f'{joint}_Y']
+        z = data[f'{joint}_Z']
+        ax.scatter(x, y, z)
+
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_zlabel('z')
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+        ax.set_zlim(z_min, z_max)
+        ax.view_init(elev=0, azim=0)
+        plt.title(joint)
+        plt.show()
 
     offset_y = 600
     offset_x = 200
@@ -54,6 +87,7 @@ def main():
 
     print("Broj qpos:", model_mj.nq)
     print("Broj site-ova:", model_mj.nsite)
+    print("Broj DOF:", model_mj.nv)
     for j in range(model_mj.njnt):
         joint = model_mj.jnt(j)
         print(j, joint.name, joint.type, joint.qposadr)
@@ -107,107 +141,113 @@ def main():
             print("Site pos (sim):", marker, site_pos_sim)
     '''
 
-    site_shoulder = "l_shoulder_pos"
-    site_ankle = "r_ankle_pos"
-    site_hip = "r_hip_pos"
+    site_names = [
+        "l_elbow_pos",
+        "r_elbow_pos",
+        "l_ankle_pos",
+        "r_ankle_pos",
+        "l_knee_pos",
+        "r_knee_pos",
+    ]
 
-    site_id_sh = mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, site_shoulder)
-    site_id_an = mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, site_ankle)
-    site_id_hi = mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, site_hip)
+    site_ids = [
+        mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, name)
+        for name in site_names
+    ]
+
+    N = len(site_ids)
 
     # Jacobian
-    Jp_sh = np.zeros((3, model_mj.nv))
-    Jr_sh = np.zeros((3, model_mj.nv))
+    J_pos = [np.zeros((3, model_mj.nv)) for _ in range(N)]
+    J_rot = [np.zeros((3, model_mj.nv)) for _ in range(N)]
 
-    Jp_an = np.zeros((3, model_mj.nv))
-    Jr_an = np.zeros((3, model_mj.nv))
+    marker_ids = [
+        data.columns.get_loc(name + '_X')
+        for name in site_names
+    ]
 
-    Jp_hi = np.zeros((3, model_mj.nv))
-    Jr_hi = np.zeros((3, model_mj.nv))
-
-    marker_id_sh = data.columns.get_loc(site_shoulder + '_X')
-    marker_id_an = data.columns.get_loc(site_ankle + '_X')
-    marker_id_hi = data.columns.get_loc(site_hip + '_X')
-    print(marker_id_sh, marker_id_an, marker_id_hi)
-
-
-    def mocap_l_shoulder(t):
-        return data.iloc[t, marker_id_sh:marker_id_sh + 3].to_numpy()
-
-    def mocap_r_ankle(t):
-        return data.iloc[t, marker_id_an:marker_id_an + 3].to_numpy()
-
-    def mocap_r_hip(t):
-        return data.iloc[t, marker_id_hi:marker_id_hi + 3].to_numpy()
+    print(marker_ids)
 
     def enforce_joint_limits(model, data):
         for j in range(model.njnt):
             if not model.jnt_limited[j]:
                 continue
 
-            qpos_adr = model.jnt_qposadr[j]
             jtype = model.jnt_type[j]
-
+            qadr = model.jnt_qposadr[j]
             lo, hi = model.jnt_range[j]
 
-            if jtype == mj.mjtJoint.mjJNT_HINGE:
-                data.qpos[qpos_adr] = np.clip(data.qpos[qpos_adr], lo, hi)
+            if jtype in (mj.mjtJoint.mjJNT_HINGE, mj.mjtJoint.mjJNT_SLIDE):
+                data.qpos[qadr] = np.clip(data.qpos[qadr], lo, hi)
 
-            elif jtype == mj.mjtJoint.mjJNT_SLIDE:
-                data.qpos[qpos_adr] = np.clip(data.qpos[qpos_adr], lo, hi)
-
-
-    def ik_step_multi(model, data, target_sh, target_an, target_hi, step_size=0.5, damping=1e-4):
+    def ik_step_nsite(model, data, site_ids, targets, weights=None, step_size=0.2, damping=1e-3):
         mj.mj_forward(model, data)
 
-        e_sh = target_sh - data.site_xpos[site_id_sh]
-        e_an = target_an - data.site_xpos[site_id_an]
-        e_hi = target_hi - data.site_xpos[site_id_hi]
+        N = len(site_ids)
+        if weights is None:
+            weights = np.ones(N)
 
-        # Jacobian
-        mj.mj_jacSite(model, data, Jp_sh, Jr_sh, site_id_sh)
-        mj.mj_jacSite(model, data, Jp_an, Jr_an, site_id_an)
-        mj.mj_jacSite(model, data, Jp_hi, Jr_hi, site_id_hi)
+        e_list = []
+        J_list = []
 
-        e = np.concatenate([e_sh, e_an, e_hi], axis=0)
-        J = np.vstack([Jp_sh, Jp_an, Jp_hi])
+        for i, site_id in enumerate(site_ids):
+            ei = targets[i] - data.site_xpos[site_id]
+            ei *= weights[i]
+            e_list.append(ei)
 
-        # Damped least squares
+            # Jacobian
+            mj.mj_jacSite(model, data, J_pos[i], J_rot[i], site_id)
+            J_list.append(weights[i] * J_pos[i])
+
+        e = np.concatenate(e_list, axis=0)  # (3N,)
+        J = np.vstack(J_list)  # (3N, nv)
+
+        # damped least squares
         JJt = J @ J.T
         dq = J.T @ np.linalg.solve(
-            JJt + damping * np.eye(9),
+            JJt + damping * np.eye(3 * N),
             e
         )
 
         mj.mj_integratePos(model, data.qpos, dq * step_size, 1)
+
         enforce_joint_limits(model, data)
 
         return np.linalg.norm(e)
 
-    def solve_one_frame_multi(model, data, target_sh, target_an, target_hi, n_iter=20, tol=1e-4):
-        for i in range(n_iter):
-            err = ik_step_multi(model, data, target_sh, target_an, target_hi)
+    def solve_one_frame_nsite(model, data, site_ids, targets, weights=None, n_iter=30, tol=1e-4):
+        for _ in range(n_iter):
+            err = ik_step_nsite(
+                model, data,
+                site_ids, targets,
+                weights
+            )
             if err < tol:
                 break
 
     data_mj.qpos[:] = 0
     mj.mj_forward(model_mj, data_mj)
 
+    weights = [
+        1.0,  # lakat
+        1.0,
+        10.0,  # stopalo
+        10.0,
+        2.0,  # koleno
+        2.0,
+    ]
+
     t = 0
-    target_sh = mocap_l_shoulder(t)
-    target_an = mocap_r_ankle(t)
-    target_hi = mocap_r_hip(t)
+    targets = [
+        data.iloc[t, id:id+3].to_numpy()
+        for id in marker_ids
+    ]
 
-    solve_one_frame_multi(model_mj, data_mj, target_sh, target_an, target_hi)
+    solve_one_frame_nsite(model_mj, data_mj, site_ids, targets, weights)
 
-    print("Shoulder target:", target_sh)
-    print("Shoulder model :", data_mj.site_xpos[site_id_sh])
+    print("Targets:", targets)
+    print("Model :", data_mj.site_xpos[site_ids])
 
-    print("Ankle target:", target_an)
-    print("Ankle model :", data_mj.site_xpos[site_id_an])
-
-    print("Hip target:", target_hi)
-    print("Hip model :", data_mj.site_xpos[site_id_hi])
 
     T_test = 2000
     qpos_traj = np.zeros((T_test, model_mj.nq))
@@ -217,21 +257,16 @@ def main():
 
     for t in range(T_test):
         print("Frejm", t)
-        target_sh = mocap_l_shoulder(t)
-        target_an = mocap_r_ankle(t)
-        target_hi = mocap_r_hip(t)
+        targets = [
+            data.iloc[t, id:id + 3].to_numpy()
+            for id in marker_ids
+        ]
 
-        solve_one_frame_multi(model_mj, data_mj, target_sh, target_an, target_hi)
+        solve_one_frame_nsite(model_mj, data_mj, site_ids, targets, weights)
         qpos_traj[t] = data_mj.qpos.copy()
 
-    print("Shoulder target:", target_sh)
-    print("Shoulder model :", data_mj.site_xpos[site_id_sh])
-
-    print("Ankle target:", target_an)
-    print("Ankle model :", data_mj.site_xpos[site_id_an])
-
-    print("Hip target:", target_hi)
-    print("Hip model :", data_mj.site_xpos[site_id_hi])
+    print("Targets:", targets)
+    print("Model :", data_mj.site_xpos[site_ids])
 
     import time
     import mujoco.viewer
