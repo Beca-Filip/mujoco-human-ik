@@ -18,11 +18,3 @@ def get_names(data):
         if name not in names:
             names.append(name)
     return names
-
-
-def site_position(model, qpos, site_id):
-    data = mj.MjData(model)
-    data.qpos[:] = qpos
-    mj.mj_forward(model, data)
-    return data.site(site_id).xpos.copy()
-
