@@ -28,9 +28,7 @@ def main():
 
     z_min = 0.0
     z_max = data.filter(regex=r'_Z$').max().max()
-    z_max = z_max * 5/4
-
-
+    z_max = z_max * 5 / 4
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -46,7 +44,7 @@ def main():
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_min, y_max)
     ax.set_zlim(z_min, z_max)
-    #ax.set_aspect("equal")
+    # ax.set_aspect("equal")
     ax.view_init(elev=0, azim=0)
     plt.show()
 
@@ -142,12 +140,29 @@ def main():
     '''
 
     site_names = [
+        "l_shoulder_pos",
+        "r_shoulder_pos",
         "l_elbow_pos",
         "r_elbow_pos",
+        "l_wrist_pos",
+        "r_wrist_pos",
         "l_ankle_pos",
         "r_ankle_pos",
         "l_knee_pos",
         "r_knee_pos",
+    ]
+
+    weights = [
+        1.0,  # rame
+        1.0,
+        1.0,  # lakat
+        1.0,
+        1.0,  # saka
+        1.0,
+        10.0,  # stopalo
+        10.0,
+        2.0,  # koleno
+        2.0,
     ]
 
     site_ids = [
@@ -180,13 +195,14 @@ def main():
             if jtype in (mj.mjtJoint.mjJNT_HINGE, mj.mjtJoint.mjJNT_SLIDE):
                 data.qpos[qadr] = np.clip(data.qpos[qadr], lo, hi)
 
-    def ik_step_nsite(model, data, site_ids, targets, weights=None, step_size=0.2, damping=1e-3):
+    def ik_step_nsite(model, data, site_ids, targets, q_ref, weights=None, step_size=0.1, damping=1e-3, mu=5e-3):
         mj.mj_forward(model, data)
 
         N = len(site_ids)
         if weights is None:
             weights = np.ones(N)
 
+        # stacked error & Jacobian
         e_list = []
         J_list = []
 
@@ -202,12 +218,14 @@ def main():
         e = np.concatenate(e_list, axis=0)  # (3N,)
         J = np.vstack(J_list)  # (3N, nv)
 
-        # damped least squares
-        JJt = J @ J.T
-        dq = J.T @ np.linalg.solve(
-            JJt + damping * np.eye(3 * N),
-            e
-        )
+        dq_prior = np.zeros(model.nv)
+        mj.mj_differentiatePos(model, dq_prior, 1, data.qpos, q_ref)
+
+        JTJ = J.T @ J
+        A = JTJ + damping * np.eye(model.nv) + mu * np.eye(model.nv)
+        b = J.T @ e - mu * dq_prior
+
+        dq = np.linalg.solve(A, b)
 
         mj.mj_integratePos(model, data.qpos, dq * step_size, 1)
 
@@ -215,31 +233,20 @@ def main():
 
         return np.linalg.norm(e)
 
-    def solve_one_frame_nsite(model, data, site_ids, targets, weights=None, n_iter=30, tol=1e-4):
+    def solve_one_frame_nsite(model, data, site_ids, targets, weights=None, n_iter=20, tol=1e-4):
+        mj.mj_forward(model, data)
+        q_ref = data.qpos.copy()
         for _ in range(n_iter):
-            err = ik_step_nsite(
-                model, data,
-                site_ids, targets,
-                weights
-            )
+            err = ik_step_nsite(model, data, site_ids, targets, q_ref, weights)
             if err < tol:
                 break
 
     data_mj.qpos[:] = 0
     mj.mj_forward(model_mj, data_mj)
 
-    weights = [
-        1.0,  # lakat
-        1.0,
-        10.0,  # stopalo
-        10.0,
-        2.0,  # koleno
-        2.0,
-    ]
-
     t = 0
     targets = [
-        data.iloc[t, id:id+3].to_numpy()
+        data.iloc[t, id:id + 3].to_numpy()
         for id in marker_ids
     ]
 
@@ -247,7 +254,6 @@ def main():
 
     print("Targets:", targets)
     print("Model :", data_mj.site_xpos[site_ids])
-
 
     T_test = 2000
     qpos_traj = np.zeros((T_test, model_mj.nq))
@@ -284,3 +290,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
