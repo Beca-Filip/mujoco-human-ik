@@ -140,6 +140,22 @@ def main():
     def mocap_r_hip(t):
         return data.iloc[t, marker_id_hi:marker_id_hi + 3].to_numpy()
 
+    def enforce_joint_limits(model, data):
+        for j in range(model.njnt):
+            if not model.jnt_limited[j]:
+                continue
+
+            qpos_adr = model.jnt_qposadr[j]
+            jtype = model.jnt_type[j]
+
+            lo, hi = model.jnt_range[j]
+
+            if jtype == mj.mjtJoint.mjJNT_HINGE:
+                data.qpos[qpos_adr] = np.clip(data.qpos[qpos_adr], lo, hi)
+
+            elif jtype == mj.mjtJoint.mjJNT_SLIDE:
+                data.qpos[qpos_adr] = np.clip(data.qpos[qpos_adr], lo, hi)
+
 
     def ik_step_multi(model, data, target_sh, target_an, target_hi, step_size=0.5, damping=1e-4):
         mj.mj_forward(model, data)
@@ -164,6 +180,7 @@ def main():
         )
 
         mj.mj_integratePos(model, data.qpos, dq * step_size, 1)
+        enforce_joint_limits(model, data)
 
         return np.linalg.norm(e)
 
