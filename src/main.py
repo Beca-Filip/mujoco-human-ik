@@ -109,9 +109,11 @@ def main():
 
     site_shoulder = "l_shoulder_pos"
     site_ankle = "r_ankle_pos"
+    site_hip = "r_hip_pos"
 
     site_id_sh = mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, site_shoulder)
     site_id_an = mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, site_ankle)
+    site_id_hi = mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, site_hip)
 
     # Jacobian
     Jp_sh = np.zeros((3, model_mj.nv))
@@ -120,9 +122,14 @@ def main():
     Jp_an = np.zeros((3, model_mj.nv))
     Jr_an = np.zeros((3, model_mj.nv))
 
+    Jp_hi = np.zeros((3, model_mj.nv))
+    Jr_hi = np.zeros((3, model_mj.nv))
+
     marker_id_sh = data.columns.get_loc(site_shoulder + '_X')
     marker_id_an = data.columns.get_loc(site_ankle + '_X')
-    print(marker_id_sh, marker_id_an)
+    marker_id_hi = data.columns.get_loc(site_hip + '_X')
+    print(marker_id_sh, marker_id_an, marker_id_hi)
+
 
     def mocap_l_shoulder(t):
         return data.iloc[t, marker_id_sh:marker_id_sh + 3].to_numpy()
@@ -130,24 +137,29 @@ def main():
     def mocap_r_ankle(t):
         return data.iloc[t, marker_id_an:marker_id_an + 3].to_numpy()
 
+    def mocap_r_hip(t):
+        return data.iloc[t, marker_id_hi:marker_id_hi + 3].to_numpy()
 
-    def ik_step_multi(model, data, target_sh, target_an, step_size=0.5, damping=1e-4):
+
+    def ik_step_multi(model, data, target_sh, target_an, target_hi, step_size=0.5, damping=1e-4):
         mj.mj_forward(model, data)
 
         e_sh = target_sh - data.site_xpos[site_id_sh]
         e_an = target_an - data.site_xpos[site_id_an]
+        e_hi = target_hi - data.site_xpos[site_id_hi]
 
         # Jacobian
         mj.mj_jacSite(model, data, Jp_sh, Jr_sh, site_id_sh)
         mj.mj_jacSite(model, data, Jp_an, Jr_an, site_id_an)
+        mj.mj_jacSite(model, data, Jp_hi, Jr_hi, site_id_hi)
 
-        e = np.concatenate([e_sh, e_an], axis=0)
-        J = np.vstack([Jp_sh, Jp_an])
+        e = np.concatenate([e_sh, e_an, e_hi], axis=0)
+        J = np.vstack([Jp_sh, Jp_an, Jp_hi])
 
         # Damped least squares
         JJt = J @ J.T
         dq = J.T @ np.linalg.solve(
-            JJt + damping * np.eye(6),
+            JJt + damping * np.eye(9),
             e
         )
 
@@ -155,9 +167,9 @@ def main():
 
         return np.linalg.norm(e)
 
-    def solve_one_frame_multi(model, data, target_sh, target_an, n_iter=20, tol=1e-4):
+    def solve_one_frame_multi(model, data, target_sh, target_an, target_hi, n_iter=20, tol=1e-4):
         for i in range(n_iter):
-            err = ik_step_multi(model, data, target_sh, target_an)
+            err = ik_step_multi(model, data, target_sh, target_an, target_hi)
             if err < tol:
                 break
 
@@ -167,14 +179,18 @@ def main():
     t = 0
     target_sh = mocap_l_shoulder(t)
     target_an = mocap_r_ankle(t)
+    target_hi = mocap_r_hip(t)
 
-    solve_one_frame_multi(model_mj, data_mj, target_sh, target_an)
+    solve_one_frame_multi(model_mj, data_mj, target_sh, target_an, target_hi)
 
     print("Shoulder target:", target_sh)
     print("Shoulder model :", data_mj.site_xpos[site_id_sh])
 
     print("Ankle target:", target_an)
     print("Ankle model :", data_mj.site_xpos[site_id_an])
+
+    print("Hip target:", target_hi)
+    print("Hip model :", data_mj.site_xpos[site_id_hi])
 
     T_test = 2000
     qpos_traj = np.zeros((T_test, model_mj.nq))
@@ -186,8 +202,9 @@ def main():
         print("Frejm", t)
         target_sh = mocap_l_shoulder(t)
         target_an = mocap_r_ankle(t)
+        target_hi = mocap_r_hip(t)
 
-        solve_one_frame_multi(model_mj, data_mj, target_sh, target_an)
+        solve_one_frame_multi(model_mj, data_mj, target_sh, target_an, target_hi)
         qpos_traj[t] = data_mj.qpos.copy()
 
     print("Shoulder target:", target_sh)
@@ -195,6 +212,9 @@ def main():
 
     print("Ankle target:", target_an)
     print("Ankle model :", data_mj.site_xpos[site_id_an])
+
+    print("Hip target:", target_hi)
+    print("Hip model :", data_mj.site_xpos[site_id_hi])
 
     import time
     import mujoco.viewer
