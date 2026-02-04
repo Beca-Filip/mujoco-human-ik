@@ -30,42 +30,42 @@ def main():
     z_max = data.filter(regex=r'_Z$').max().max()
     z_max = z_max * 5 / 4
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    for joint in joint_names:
-        x = data[f'{joint}_X'][900]
-        y = data[f'{joint}_Y'][900]
-        z = data[f'{joint}_Z'][900]
-        ax.scatter(x, y, z)
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111, projection='3d')
+    # for joint in joint_names:
+    #     x = data[f'{joint}_X'][900]
+    #     y = data[f'{joint}_Y'][900]
+    #     z = data[f'{joint}_Z'][900]
+    #     ax.scatter(x, y, z)
 
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('z')
-    ax.set_xlim(x_min, x_max)
-    ax.set_ylim(y_min, y_max)
-    ax.set_zlim(z_min, z_max)
-    # ax.set_aspect("equal")
-    ax.view_init(elev=0, azim=0)
-    plt.show()
+    # ax.set_xlabel('x')
+    # ax.set_ylabel('y')
+    # ax.set_zlabel('z')
+    # ax.set_xlim(x_min, x_max)
+    # ax.set_ylim(y_min, y_max)
+    # ax.set_zlim(z_min, z_max)
+    # # ax.set_aspect("equal")
+    # ax.view_init(elev=0, azim=0)
+    # plt.show()
 
-    for joint in joint_names:
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
+    # for joint in joint_names:
+    #     fig = plt.figure()
+    #     ax = fig.add_subplot(111, projection='3d')
 
-        x = data[f'{joint}_X']
-        y = data[f'{joint}_Y']
-        z = data[f'{joint}_Z']
-        ax.scatter(x, y, z)
+    #     x = data[f'{joint}_X']
+    #     y = data[f'{joint}_Y']
+    #     z = data[f'{joint}_Z']
+    #     ax.scatter(x, y, z)
 
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_zlabel('z')
-        ax.set_xlim(x_min, x_max)
-        ax.set_ylim(y_min, y_max)
-        ax.set_zlim(z_min, z_max)
-        ax.view_init(elev=0, azim=0)
-        plt.title(joint)
-        plt.show()
+    #     ax.set_xlabel('x')
+    #     ax.set_ylabel('y')
+    #     ax.set_zlabel('z')
+    #     ax.set_xlim(x_min, x_max)
+    #     ax.set_ylim(y_min, y_max)
+    #     ax.set_zlim(z_min, z_max)
+    #     ax.view_init(elev=0, azim=0)
+    #     plt.title(joint)
+    #     plt.show()
 
     offset_y = 600
     offset_x = 200
