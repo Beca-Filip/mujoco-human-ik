@@ -7,6 +7,9 @@ from mujoco.glfw import glfw
 import os
 from utils import read_data, get_names
 
+MOCAP_SAMPLING_FREQ = 300.
+MOCAP_SAMPLING_TIME = 1. / MOCAP_SAMPLING_FREQ
+
 
 def main():
     data_path = "data/03_1_1_pos.tsv"
@@ -30,42 +33,42 @@ def main():
     z_max = data.filter(regex=r'_Z$').max().max()
     z_max = z_max * 5 / 4
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    for joint in joint_names:
-        x = data[f'{joint}_X'][900]
-        y = data[f'{joint}_Y'][900]
-        z = data[f'{joint}_Z'][900]
-        ax.scatter(x, y, z)
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111, projection='3d')
+    # for joint in joint_names:
+    #     x = data[f'{joint}_X'][900]
+    #     y = data[f'{joint}_Y'][900]
+    #     z = data[f'{joint}_Z'][900]
+    #     ax.scatter(x, y, z)
 
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('z')
-    ax.set_xlim(x_min, x_max)
-    ax.set_ylim(y_min, y_max)
-    ax.set_zlim(z_min, z_max)
-    # ax.set_aspect("equal")
-    ax.view_init(elev=0, azim=0)
-    plt.show()
+    # ax.set_xlabel('x')
+    # ax.set_ylabel('y')
+    # ax.set_zlabel('z')
+    # ax.set_xlim(x_min, x_max)
+    # ax.set_ylim(y_min, y_max)
+    # ax.set_zlim(z_min, z_max)
+    # # ax.set_aspect("equal")
+    # ax.view_init(elev=0, azim=0)
+    # plt.show()
 
-    for joint in joint_names:
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
+    # for joint in joint_names:
+    #     fig = plt.figure()
+    #     ax = fig.add_subplot(111, projection='3d')
 
-        x = data[f'{joint}_X']
-        y = data[f'{joint}_Y']
-        z = data[f'{joint}_Z']
-        ax.scatter(x, y, z)
+    #     x = data[f'{joint}_X']
+    #     y = data[f'{joint}_Y']
+    #     z = data[f'{joint}_Z']
+    #     ax.scatter(x, y, z)
 
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_zlabel('z')
-        ax.set_xlim(x_min, x_max)
-        ax.set_ylim(y_min, y_max)
-        ax.set_zlim(z_min, z_max)
-        ax.view_init(elev=0, azim=0)
-        plt.title(joint)
-        plt.show()
+    #     ax.set_xlabel('x')
+    #     ax.set_ylabel('y')
+    #     ax.set_zlabel('z')
+    #     ax.set_xlim(x_min, x_max)
+    #     ax.set_ylim(y_min, y_max)
+    #     ax.set_zlim(z_min, z_max)
+    #     ax.view_init(elev=0, azim=0)
+    #     plt.title(joint)
+    #     plt.show()
 
     offset_y = 600
     offset_x = 200
@@ -276,16 +279,45 @@ def main():
 
     import time
     import mujoco.viewer
+    import imageio
 
-    dt = model_mj.opt.timestep
+    # dt = model_mj.opt.timestep
+    dt = MOCAP_SAMPLING_TIME
     data_mj = mj.MjData(model_mj)
+
+    # Video output settings
+    video_filename = "output.mp4"
+    fps = int(1 / dt) if dt > 0 else 30
+    width, height = 1280, 720
+
+    # Create renderer for video capture
+    renderer = mj.Renderer(model_mj, height, width)
+
+    # Set up camera for full body view
+    camera = mj.MjvCamera()
+    camera.azimuth = 90       # Side view
+    camera.elevation = -15    # Slightly above
+    camera.distance = 4.0     # Distance to see whole body
+    camera.lookat[:] = [0, 0, 1.0]  # Look at approximate body center
+
+    frames = []
+
     with mujoco.viewer.launch_passive(model_mj, data_mj) as viewer:
         for t in range(len(qpos_traj)):
             data_mj.qpos[:] = qpos_traj[t]
             mj.mj_forward(model_mj, data_mj)
 
+            # Render frame for video
+            renderer.update_scene(data_mj, camera)
+            frame = renderer.render()
+            frames.append(frame.copy())
+
             viewer.sync()
             time.sleep(dt)
+
+    # Save video
+    imageio.mimsave(video_filename, frames, fps=fps)
+    print(f"Video saved to {video_filename}")
 
 
 if __name__ == "__main__":
