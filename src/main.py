@@ -279,17 +279,45 @@ def main():
 
     import time
     import mujoco.viewer
+    import imageio
 
     # dt = model_mj.opt.timestep
     dt = MOCAP_SAMPLING_TIME
     data_mj = mj.MjData(model_mj)
+
+    # Video output settings
+    video_filename = "output.mp4"
+    fps = int(1 / dt) if dt > 0 else 30
+    width, height = 1280, 720
+
+    # Create renderer for video capture
+    renderer = mj.Renderer(model_mj, height, width)
+
+    # Set up camera for full body view
+    camera = mj.MjvCamera()
+    camera.azimuth = 90       # Side view
+    camera.elevation = -15    # Slightly above
+    camera.distance = 4.0     # Distance to see whole body
+    camera.lookat[:] = [0, 0, 1.0]  # Look at approximate body center
+
+    frames = []
+
     with mujoco.viewer.launch_passive(model_mj, data_mj) as viewer:
         for t in range(len(qpos_traj)):
             data_mj.qpos[:] = qpos_traj[t]
             mj.mj_forward(model_mj, data_mj)
 
+            # Render frame for video
+            renderer.update_scene(data_mj, camera)
+            frame = renderer.render()
+            frames.append(frame.copy())
+
             viewer.sync()
             time.sleep(dt)
+
+    # Save video
+    imageio.mimsave(video_filename, frames, fps=fps)
+    print(f"Video saved to {video_filename}")
 
 
 if __name__ == "__main__":
