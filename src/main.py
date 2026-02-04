@@ -7,6 +7,9 @@ from mujoco.glfw import glfw
 import os
 from utils import read_data, get_names
 
+MOCAP_SAMPLING_FREQ = 300.
+MOCAP_SAMPLING_TIME = 1. / MOCAP_SAMPLING_FREQ
+
 
 def main():
     data_path = "data/03_1_1_pos.tsv"
@@ -277,7 +280,8 @@ def main():
     import time
     import mujoco.viewer
 
-    dt = model_mj.opt.timestep
+    # dt = model_mj.opt.timestep
+    dt = MOCAP_SAMPLING_TIME
     data_mj = mj.MjData(model_mj)
     with mujoco.viewer.launch_passive(model_mj, data_mj) as viewer:
         for t in range(len(qpos_traj)):
