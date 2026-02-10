@@ -1,293 +1,127 @@
-import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import mujoco as mj
-from scipy.optimize import least_squares
-from mujoco.glfw import glfw
-import os
-from utils import read_data, get_names
+from utils import get_names
+from mocap import load_mocap_data, apply_offsets, mm_to_meters, compute_axis_scaling_factors,apply_axis_scaling
+from filters import filter_marker_targets
+from ik import enforce_joint_limits, ik_step_multi_site, solve_ik_for_frame
+from visualization import simulation_qpos_trajectory, render_qpos_trajectory_to_video, compute_axis_limits, plot_skeleton_at_frame, plot_joint_trajectories
+
+
+# ============================================================
+# --------------------------- MAIN ---------------------------
+# ============================================================
 
 
 def main():
-    data_path = "data/03_1_1_pos.tsv"
-    separator = "\t"
-    header_row = 5
-    data_start = 8
-    data = read_data(data_path, separator, data_start, header_row)
-    print(data)
-    # print(data.iloc[1, :])
+    # ---------------- Load mocap data ----------------
+    mocap_data = load_mocap_data(data_path="data/03_1_1_pos.tsv")
+    joint_names = get_names(mocap_data)
 
-    joint_names = get_names(data)
-    # print(joint_names)
+    # ---------------- Apply offsets ------------------
+    mocap_data = apply_offsets(mocap_data)
 
-    x_min = data.filter(regex=r'_X$').min().min()
-    x_max = data.filter(regex=r'_X$').max().max()
+    # ---------------- Convert mm to m ----------------
+    mocap_data = mm_to_meters(mocap_data)
 
-    y_min = data.filter(regex=r'_Y$').min().min()
-    y_max = data.filter(regex=r'_Y$').max().max()
+    # --------------- Plot MoCap data -----------------
+    # Compute shared axis limits once
+    x_min, x_max, y_min, y_max, z_min, z_max = compute_axis_limits(mocap_data)
+    x_limits = (x_min, x_max)
+    y_limits = (y_min, y_max)
+    z_limits = (z_min, z_max)
 
-    z_min = 0.0
-    z_max = data.filter(regex=r'_Z$').max().max()
-    z_max = z_max * 5 / 4
+    plot_skeleton_at_frame(mocap_data, joint_names, frame_idx=900, x_limits=x_limits, y_limits=y_limits, z_limits=z_limits)
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    for joint in joint_names:
-        x = data[f'{joint}_X'][900]
-        y = data[f'{joint}_Y'][900]
-        z = data[f'{joint}_Z'][900]
-        ax.scatter(x, y, z)
+    plot_joint_trajectories(mocap_data,joint_names,x_limits,y_limits,z_limits)
 
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('z')
-    ax.set_xlim(x_min, x_max)
-    ax.set_ylim(y_min, y_max)
-    ax.set_zlim(z_min, z_max)
-    # ax.set_aspect("equal")
-    ax.view_init(elev=0, azim=0)
-    plt.show()
+    # --------------- Load MuJoCo model ---------------
+    model = mj.MjModel.from_xml_path("human_marina.xml")
+    data = mj.MjData(model)
+    mj.mj_forward(model, data)
 
-    for joint in joint_names:
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
+    print("Number qpos:", model.nq)
+    print("Number site:", model.nsite)
+    print("Number DOF:", model.nv)
 
-        x = data[f'{joint}_X']
-        y = data[f'{joint}_Y']
-        z = data[f'{joint}_Z']
-        ax.scatter(x, y, z)
+    # ---------------- Axis scaling ----------------
+    y_scale, z_scale = compute_axis_scaling_factors(
+        model,
+        data,
+        mocap_data,
+        marker_names=[
+            "l_shoulder_pos", "r_shoulder_pos",
+            "l_hip_pos", "r_hip_pos",
+            "l_knee_pos", "r_knee_pos",
+        ]
+    )
 
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_zlabel('z')
-        ax.set_xlim(x_min, x_max)
-        ax.set_ylim(y_min, y_max)
-        ax.set_zlim(z_min, z_max)
-        ax.view_init(elev=0, azim=0)
-        plt.title(joint)
-        plt.show()
+    mocap_data = apply_axis_scaling(mocap_data, y_scale, z_scale)
 
-    offset_y = 600
-    offset_x = 200
-    for col in data.columns:
-        if col.endswith("Y"):
-            data.loc[:, col] = data.loc[:, col] - offset_y
-        if col.endswith("X"):
-            data.loc[:, col] = data.loc[:, col] - offset_x
-    # print(data)
-
-    data = data / 1000.0
-    # print(data)
-
-    model_mj = mj.MjModel.from_xml_path("human_marina.xml")
-    data_mj = mj.MjData(model_mj)
-    mj.mj_forward(model_mj, data_mj)
-
-    print("Broj qpos:", model_mj.nq)
-    print("Broj site-ova:", model_mj.nsite)
-    print("Broj DOF:", model_mj.nv)
-    for j in range(model_mj.njnt):
-        joint = model_mj.jnt(j)
-        print(j, joint.name, joint.type, joint.qposadr)
-
-    frame_idx = 0
-    site = "r_knee_pos"
-    marker_pos = data.loc[frame_idx, [site + "_X", site + "_Y", site + "_Z"]].to_numpy()
-    print("Marker pos (mocap):", marker_pos)
-
-    site_id = mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, site)
-    site_pos_sim = data_mj.site_xpos[site_id]
-    print("Site pos (sim):", site_pos_sim)
-
-    # ==============================================
-    markers = ['l_shoulder_pos', 'r_shoulder_pos', 'l_hip_pos', 'r_hip_pos', 'l_knee_pos', 'r_knee_pos']
-
-    y_list = []
-    z_list = []
-    for marker in markers:
-        frame_idx = 0
-        marker_pos = data.loc[frame_idx, [marker + "_X", marker + "_Y", marker + "_Z"]].to_numpy()
-        print("Marker pos (mocap):", marker, marker_pos)
-        site_id = mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, marker)
-        site_pos_sim = data_mj.site_xpos[site_id]
-        print("Site pos (sim):", marker, site_pos_sim)
-
-        y_scale = site_pos_sim[1] / marker_pos[1]
-        y_list.append(y_scale)
-
-        z_scale = site_pos_sim[2] / marker_pos[2]
-        z_list.append(z_scale)
-
-    y_res = np.mean(y_list)
-    z_res = np.mean(z_list)
-
-    # print(y_res, z_res)
-
-    for col in data.columns:
-        if col.endswith("Y"):
-            data.loc[:, col] = data.loc[:, col] * y_res
-        if col.endswith("Z"):
-            data.loc[:, col] = data.loc[:, col] * z_res
-
-    ''' 
-        for marker in markers:
-            frame_idx = 0
-            marker_pos = data.loc[frame_idx, [marker + "_X", marker + "_Y", marker + "_Z"]].to_numpy()
-            print("Marker pos (mocap):", marker, marker_pos)
-            site_id = mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, marker)
-            site_pos_sim = data_mj.site_xpos[site_id]
-            print("Site pos (sim):", marker, site_pos_sim)
-    '''
-
+    # ---------------- Marker & site configuration ----------------
     site_names = [
-        "l_shoulder_pos",
-        "r_shoulder_pos",
-        "l_elbow_pos",
-        "r_elbow_pos",
-        "l_wrist_pos",
-        "r_wrist_pos",
-        "l_ankle_pos",
-        "r_ankle_pos",
-        "l_knee_pos",
-        "r_knee_pos",
+        "l_shoulder_pos", "r_shoulder_pos",
+        "l_elbow_pos", "r_elbow_pos",
+        "l_wrist_pos", "r_wrist_pos",
+        "l_knee_pos", "r_knee_pos",
+        "l_ankle_pos", "r_ankle_pos",
     ]
 
-    weights = [
-        1.0,  # rame
-        1.0,
-        1.0,  # lakat
-        1.0,
-        1.0,  # saka
-        1.0,
-        10.0,  # stopalo
-        10.0,
-        2.0,  # koleno
-        2.0,
+    site_weights = [
+        1.0, 1.0,
+        1.0, 1.0,
+        1.0, 1.0,
+        2.0, 2.0,
+        10.0, 10.0,
     ]
 
     site_ids = [
-        mj.mj_name2id(model_mj, mj.mjtObj.mjOBJ_SITE, name)
+        mj.mj_name2id(model, mj.mjtObj.mjOBJ_SITE, name)
         for name in site_names
     ]
 
-    N = len(site_ids)
-
-    # Jacobian
-    J_pos = [np.zeros((3, model_mj.nv)) for _ in range(N)]
-    J_rot = [np.zeros((3, model_mj.nv)) for _ in range(N)]
-
-    marker_ids = [
-        data.columns.get_loc(name + '_X')
+    marker_column_indices = [
+        mocap_data.columns.get_loc(f"{name}_X")
         for name in site_names
     ]
 
-    print(marker_ids)
+    # ---------------- Trajectory IK ----------------
+    num_frames = 2000
+    qpos_trajectory = np.zeros((num_frames, model.nq))
 
-    def enforce_joint_limits(model, data):
-        for j in range(model.njnt):
-            if not model.jnt_limited[j]:
-                continue
+    data.qpos[:] = 0.0
+    mj.mj_forward(model, data)
 
-            jtype = model.jnt_type[j]
-            qadr = model.jnt_qposadr[j]
-            lo, hi = model.jnt_range[j]
+    previous_targets = np.array([
+        mocap_data.iloc[0, idx:idx + 3].to_numpy()
+        for idx in marker_column_indices
+    ])
 
-            if jtype in (mj.mjtJoint.mjJNT_HINGE, mj.mjtJoint.mjJNT_SLIDE):
-                data.qpos[qadr] = np.clip(data.qpos[qadr], lo, hi)
+    for frame_idx in range(num_frames):
+        print(f"Frame {frame_idx}")
 
-    def ik_step_nsite(model, data, site_ids, targets, q_ref, weights=None, step_size=0.1, damping=1e-3, mu=5e-3):
-        mj.mj_forward(model, data)
+        current_targets = np.array([
+            mocap_data.iloc[frame_idx, idx:idx + 3].to_numpy()
+            for idx in marker_column_indices
+        ])
 
-        N = len(site_ids)
-        if weights is None:
-            weights = np.ones(N)
+        filtered_targets = filter_marker_targets(
+            current_targets,
+            previous_targets,
+        )
 
-        # stacked error & Jacobian
-        e_list = []
-        J_list = []
+        solve_ik_for_frame(
+            model,
+            data,
+            site_ids,
+            filtered_targets.tolist(),
+            site_weights
+        )
 
-        for i, site_id in enumerate(site_ids):
-            ei = targets[i] - data.site_xpos[site_id]
-            ei *= weights[i]
-            e_list.append(ei)
+        qpos_trajectory[frame_idx] = data.qpos.copy()
+        previous_targets = filtered_targets.copy()
 
-            # Jacobian
-            mj.mj_jacSite(model, data, J_pos[i], J_rot[i], site_id)
-            J_list.append(weights[i] * J_pos[i])
-
-        e = np.concatenate(e_list, axis=0)  # (3N,)
-        J = np.vstack(J_list)  # (3N, nv)
-
-        dq_prior = np.zeros(model.nv)
-        mj.mj_differentiatePos(model, dq_prior, 1, data.qpos, q_ref)
-
-        JTJ = J.T @ J
-        A = JTJ + damping * np.eye(model.nv) + mu * np.eye(model.nv)
-        b = J.T @ e - mu * dq_prior
-
-        dq = np.linalg.solve(A, b)
-
-        mj.mj_integratePos(model, data.qpos, dq * step_size, 1)
-
-        enforce_joint_limits(model, data)
-
-        return np.linalg.norm(e)
-
-    def solve_one_frame_nsite(model, data, site_ids, targets, weights=None, n_iter=20, tol=1e-4):
-        mj.mj_forward(model, data)
-        q_ref = data.qpos.copy()
-        for _ in range(n_iter):
-            err = ik_step_nsite(model, data, site_ids, targets, q_ref, weights)
-            if err < tol:
-                break
-
-    data_mj.qpos[:] = 0
-    mj.mj_forward(model_mj, data_mj)
-
-    t = 0
-    targets = [
-        data.iloc[t, id:id + 3].to_numpy()
-        for id in marker_ids
-    ]
-
-    solve_one_frame_nsite(model_mj, data_mj, site_ids, targets, weights)
-
-    print("Targets:", targets)
-    print("Model :", data_mj.site_xpos[site_ids])
-
-    T_test = 2000
-    qpos_traj = np.zeros((T_test, model_mj.nq))
-
-    data_mj.qpos[:] = 0
-    mj.mj_forward(model_mj, data_mj)
-
-    for t in range(T_test):
-        print("Frejm", t)
-        targets = [
-            data.iloc[t, id:id + 3].to_numpy()
-            for id in marker_ids
-        ]
-
-        solve_one_frame_nsite(model_mj, data_mj, site_ids, targets, weights)
-        qpos_traj[t] = data_mj.qpos.copy()
-
-    print("Targets:", targets)
-    print("Model :", data_mj.site_xpos[site_ids])
-
-    import time
-    import mujoco.viewer
-
-    dt = model_mj.opt.timestep
-    data_mj = mj.MjData(model_mj)
-    with mujoco.viewer.launch_passive(model_mj, data_mj) as viewer:
-        for t in range(len(qpos_traj)):
-            data_mj.qpos[:] = qpos_traj[t]
-            mj.mj_forward(model_mj, data_mj)
-
-            viewer.sync()
-            time.sleep(dt)
-
+    simulation_qpos_trajectory(model, qpos_trajectory)
+    #render_qpos_trajectory_to_video(model, qpos_trajectory)
 
 if __name__ == "__main__":
     main()
-

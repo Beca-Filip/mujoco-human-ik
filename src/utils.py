@@ -1,5 +1,5 @@
 import pandas as pd
-import mujoco as mj
+
 
 def read_data(file_path, sep, data_start, header_row):
     data = pd.read_csv(file_path, sep=sep, skiprows=data_start, header=None)
