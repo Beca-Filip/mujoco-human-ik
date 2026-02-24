@@ -5,7 +5,11 @@ from mocap import load_mocap_data, apply_offsets, mm_to_meters, compute_axis_sca
 from filters import filter_marker_targets
 from ik import enforce_joint_limits, ik_step_multi_site, solve_ik_for_frame
 from visualization import simulation_qpos_trajectory, render_qpos_trajectory_to_video, compute_axis_limits, plot_skeleton_at_frame, plot_joint_trajectories
+from clear_data import clean_mocap_data
+from pathlib import Path
 
+ROOT_DIR = Path(__file__).resolve().parent.parent
+DATA_PATH = ROOT_DIR / "data" / "03_1_1_pos.tsv"
 
 # ============================================================
 # --------------------------- MAIN ---------------------------
@@ -14,7 +18,7 @@ from visualization import simulation_qpos_trajectory, render_qpos_trajectory_to_
 
 def main():
     # ---------------- Load mocap data ----------------
-    mocap_data = load_mocap_data(data_path="data/03_1_1_pos.tsv")
+    mocap_data = load_mocap_data(data_path=DATA_PATH)
     joint_names = get_names(mocap_data)
 
     # ---------------- Apply offsets ------------------
@@ -22,6 +26,9 @@ def main():
 
     # ---------------- Convert mm to m ----------------
     mocap_data = mm_to_meters(mocap_data)
+
+    # ---------------- Clean data ---------------------
+    mocap_data = clean_mocap_data(mocap_data)
 
     # --------------- Plot MoCap data -----------------
     # Compute shared axis limits once
