@@ -1,5 +1,6 @@
 import numpy as np
 import mujoco as mj
+import pandas as pd
 from utils import get_names
 from mocap import load_mocap_data, apply_offsets, mm_to_meters, compute_axis_scaling_factors,apply_axis_scaling
 from filters import filter_marker_targets
@@ -7,6 +8,7 @@ from ik import enforce_joint_limits, ik_step_multi_site, solve_ik_for_frame
 from visualization import simulation_qpos_trajectory, render_qpos_trajectory_to_video, compute_axis_limits, plot_skeleton_at_frame, plot_joint_trajectories
 from clear_data import clean_mocap_data
 from pathlib import Path
+import argparse
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_PATH = ROOT_DIR / "data" / "03_1_1_pos.tsv"
@@ -16,9 +18,9 @@ DATA_PATH = ROOT_DIR / "data" / "03_1_1_pos.tsv"
 # ============================================================
 
 
-def main():
+def main(model_path, mocap_path, qpos_output_path, video_output_path):
     # ---------------- Load mocap data ----------------
-    mocap_data = load_mocap_data(data_path=DATA_PATH)
+    mocap_data = load_mocap_data(data_path=mocap_path)
     joint_names = get_names(mocap_data)
 
     # ---------------- Apply offsets ------------------
@@ -42,7 +44,7 @@ def main():
     plot_joint_trajectories(mocap_data,joint_names,x_limits,y_limits,z_limits)
 
     # --------------- Load MuJoCo model ---------------
-    model = mj.MjModel.from_xml_path("human_marina.xml")
+    model = mj.MjModel.from_xml_path(str(model_path))
     data = mj.MjData(model)
     mj.mj_forward(model, data)
 
@@ -127,8 +129,49 @@ def main():
         qpos_trajectory[frame_idx] = data.qpos.copy()
         previous_targets = filtered_targets.copy()
 
+    # ---------------- Save qpos ------------------
+    df_qpos = pd.DataFrame(qpos_trajectory)
+    df_qpos.to_csv(str(qpos_output_path), index=False)
+    print(f"Saved qpos to {qpos_output_path}")
+
+    # ---------------- Render video ----------------
+    if video_output_path is not None:
+        render_qpos_trajectory_to_video(model, qpos_trajectory, str(video_output_path))
+        print(f"Saved video to {video_output_path}")
+    else:
+        print("Video rendering skipped.")
+
     simulation_qpos_trajectory(model, qpos_trajectory)
-    #render_qpos_trajectory_to_video(model, qpos_trajectory)
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="MoCap → MuJoCo IK pipeline")
+
+    parser.add_argument(
+        "--input",
+        nargs=2,
+        type=Path,
+        default=[Path("human_marina.xml"), DATA_PATH],
+        help="Model XML & MoCap TSV"
+    )
+
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("qpos.csv"),
+        help="qpos CSV"
+    )
+
+    parser.add_argument(
+        "--video_out",
+        type=Path,
+        default=None,
+        help="video MP4"
+    )
+
+    args = parser.parse_args()
+
+    model_path, mocap_path = args.input
+    qpos_out = args.output
+    video_out = args.video_out
+
+    main(model_path, mocap_path, qpos_out, video_out)
