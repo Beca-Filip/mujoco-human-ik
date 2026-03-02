@@ -22,6 +22,7 @@ def main(model_path, mocap_path, qpos_output_path, video_output_path):
     # ---------------- Load mocap data ----------------
     mocap_data = load_mocap_data(data_path=mocap_path)
     joint_names = get_names(mocap_data)
+    # print(joint_names)
 
     # ---------------- Apply offsets ------------------
     mocap_data = apply_offsets(mocap_data)
@@ -41,7 +42,7 @@ def main(model_path, mocap_path, qpos_output_path, video_output_path):
 
     plot_skeleton_at_frame(mocap_data, joint_names, frame_idx=900, x_limits=x_limits, y_limits=y_limits, z_limits=z_limits)
 
-    plot_joint_trajectories(mocap_data,joint_names,x_limits,y_limits,z_limits)
+    # plot_joint_trajectories(mocap_data, joint_names, x_limits, y_limits, z_limits)
 
     # --------------- Load MuJoCo model ---------------
     model = mj.MjModel.from_xml_path(str(model_path))
@@ -51,6 +52,12 @@ def main(model_path, mocap_path, qpos_output_path, video_output_path):
     print("Number qpos:", model.nq)
     print("Number site:", model.nsite)
     print("Number DOF:", model.nv)
+
+    all_site_names = [model.site(i).name for i in range(model.nsite)]
+    # # print(all_site_names)
+    #
+    # site_map = {model.site(i).name: i for i in range(model.nsite)}
+    # # print(site_map)
 
     # ---------------- Axis scaling ----------------
     y_scale, z_scale = compute_axis_scaling_factors(
@@ -67,21 +74,24 @@ def main(model_path, mocap_path, qpos_output_path, video_output_path):
     mocap_data = apply_axis_scaling(mocap_data, y_scale, z_scale)
 
     # ---------------- Marker & site configuration ----------------
-    site_names = [
-        "l_shoulder_pos", "r_shoulder_pos",
-        "l_elbow_pos", "r_elbow_pos",
-        "l_wrist_pos", "r_wrist_pos",
-        "l_knee_pos", "r_knee_pos",
-        "l_ankle_pos", "r_ankle_pos",
-    ]
+    # site_names = [
+    #     "l_shoulder_pos", "r_shoulder_pos",
+    #     "l_elbow_pos", "r_elbow_pos",
+    #     "l_wrist_pos", "r_wrist_pos",
+    #     "l_knee_pos", "r_knee_pos",
+    #     "l_ankle_pos", "r_ankle_pos",
+    # ]
 
-    site_weights = [
-        1.0, 1.0,
-        1.0, 1.0,
-        1.0, 1.0,
-        2.0, 2.0,
-        10.0, 10.0,
-    ]
+    site_names = [x for x in all_site_names if (x != 'r_heel_pos' and x != 'l_heel_pos')]
+    # site_names = joint_names
+
+    # site_weights = [
+    #     1.0, 1.0,
+    #     1.0, 1.0,
+    #     1.0, 1.0,
+    #     2.0, 2.0,
+    #     10.0, 10.0,
+    # ]
 
     site_ids = [
         mj.mj_name2id(model, mj.mjtObj.mjOBJ_SITE, name)
@@ -94,7 +104,7 @@ def main(model_path, mocap_path, qpos_output_path, video_output_path):
     ]
 
     # ---------------- Trajectory IK ----------------
-    num_frames = 2000
+    num_frames = mocap_data.shape[0]
     qpos_trajectory = np.zeros((num_frames, model.nq))
 
     data.qpos[:] = 0.0
@@ -123,7 +133,6 @@ def main(model_path, mocap_path, qpos_output_path, video_output_path):
             data,
             site_ids,
             filtered_targets.tolist(),
-            site_weights
         )
 
         qpos_trajectory[frame_idx] = data.qpos.copy()

@@ -37,6 +37,7 @@ def plot_cleaned_data(data, cleaned_data, time_vector, corrupted, title):
     ax[0].set_title(title)
     plt.show()
 
+
 def is_repeating(a: np.ndarray, seq_len: int) -> np.ndarray:
     """
     Detect indices where the value is repeated for a given window length.
@@ -92,7 +93,7 @@ def detect_glitches_1d(
     """
     diff_data = np.diff(data)
     diff_data_bool = np.abs(diff_data) > distance_threshold
-    print(sum(diff_data_bool))
+    # print(sum(diff_data_bool))
 
     if not np.any(diff_data_bool):
         return np.zeros(len(data), dtype=int)
@@ -165,7 +166,8 @@ def clean_mocap_data(mocap_data, dt: float = DT_DEFAULT):
 
     time_vector = np.arange(0, n_samples * dt, step=dt)
 
-    plot_mocap_data_per_axes(time_vector, mocap_data)
+    # plot_mocap_data_per_axes(time_vector, mocap_data)
+
     cleaned = mocap_data.copy(deep=True)
 
     for col in mocap_data.columns:
@@ -204,10 +206,10 @@ def clean_mocap_data(mocap_data, dt: float = DT_DEFAULT):
         cleaned.iloc[:, idx + 1] = interpolate_corrupted_segments(time_vector, data_Y, corrupted)
         cleaned.iloc[:, idx + 2] = interpolate_corrupted_segments(time_vector, data_Z, corrupted)
 
-        plot_cleaned_data(data_X, cleaned.iloc[:, idx], time_vector, corrupted, (marker_name+'_X'))
-        plot_cleaned_data(data_Y, cleaned.iloc[:, idx+1], time_vector, corrupted, (marker_name+'_Y'))
-        plot_cleaned_data(data_Z, cleaned.iloc[:, idx+2], time_vector, corrupted, (marker_name+'_Z'))
+        # plot_cleaned_data(data_X, cleaned.iloc[:, idx], time_vector, corrupted, (marker_name+'_X'))
+        # plot_cleaned_data(data_Y, cleaned.iloc[:, idx+1], time_vector, corrupted, (marker_name+'_Y'))
+        # plot_cleaned_data(data_Z, cleaned.iloc[:, idx+2], time_vector, corrupted, (marker_name+'_Z'))
 
-    plot_mocap_data_per_axes(time_vector, cleaned)
+    # plot_mocap_data_per_axes(time_vector, cleaned)
     return cleaned
 
