@@ -7,27 +7,6 @@ import mujoco as mj
 # ============================================================
 
 
-def enforce_joint_limits(model: mj.MjModel, data: mj.MjData) -> None:
-    """
-    Clamp joint positions to their physical limits.
-    """
-
-    for joint_id in range(model.njnt):
-        if not model.jnt_limited[joint_id]:
-            continue
-
-        joint_type = model.jnt_type[joint_id]
-        qpos_address = model.jnt_qposadr[joint_id]
-        qpos_min, qpos_max = model.jnt_range[joint_id]
-
-        if joint_type in (mj.mjtJoint.mjJNT_HINGE, mj.mjtJoint.mjJNT_SLIDE):
-            data.qpos[qpos_address] = np.clip(
-                data.qpos[qpos_address],
-                qpos_min,
-                qpos_max
-            )
-
-
 def ik_step_multi_site(
     model: mj.MjModel,
     data: mj.MjData,
@@ -36,8 +15,9 @@ def ik_step_multi_site(
     qpos_reference: np.ndarray,
     site_weights: list[float] | None = None,
     step_size: float = 0.1,
-    damping: float = 1e-3,
-    regularization: float = 5e-3
+    damping: float = 1e-1,
+    regularization: float = 5e-3,
+    beta: float = 1e-3
 ) -> float:
     """
     Perform a single damped least-squares IK step for multiple sites.
@@ -80,12 +60,41 @@ def ik_step_multi_site(
     dq_prior = np.zeros(model.nv)
     mj.mj_differentiatePos(model, dq_prior, 1, data.qpos, qpos_reference)
 
+    # Soft constraints
+    W_lim = np.zeros(model.nv)
+
+    for joint_id in range(model.njnt):
+
+        if not model.jnt_limited[joint_id]:
+            continue
+
+        joint_type = model.jnt_type[joint_id]
+        if joint_type not in (mj.mjtJoint.mjJNT_HINGE, mj.mjtJoint.mjJNT_SLIDE):
+            continue
+
+        q_adr = model.jnt_qposadr[joint_id]
+        q = data.qpos[q_adr]
+        q_min, q_max = model.jnt_range[joint_id]
+
+        dist_min = q - q_min
+        dist_max = q_max - q
+
+        eps = 1e-6
+        if dist_min < dist_max:
+            W_lim[q_adr-1] = 1.0 / (dist_min ** 2 + eps)
+        else:
+            W_lim[q_adr-1] = 1.0 / (dist_max ** 2 + eps)
+
+    W_lim = np.diag(W_lim)
+
     # Damped least-squares system
     Jt_J = J.T @ J
+
     system_matrix = (
-        Jt_J
-        + damping * np.eye(model.nv)
-        + regularization * np.eye(model.nv)
+            Jt_J
+            + damping * np.eye(model.nv)
+            + regularization * np.eye(model.nv)
+            + beta * W_lim
     )
     rhs = J.T @ error_vector - regularization * dq_prior
 
@@ -93,7 +102,6 @@ def ik_step_multi_site(
 
     # Integrate joint update
     mj.mj_integratePos(model, data.qpos, dq * step_size, 1)
-    enforce_joint_limits(model, data)
 
     return np.linalg.norm(error_vector)
 
@@ -125,4 +133,3 @@ def solve_ik_for_frame(
         )
         if error_norm < tolerance:
             break
-

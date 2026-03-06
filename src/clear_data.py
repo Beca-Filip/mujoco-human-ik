@@ -164,7 +164,7 @@ def clean_mocap_data(mocap_data, dt: float = DT_DEFAULT):
     n_markers = int(mocap_data.shape[1] / 3)
     n_samples = int(mocap_data.shape[0])
 
-    time_vector = np.arange(0, n_samples * dt, step=dt)
+    time_vector = np.arange(0, n_samples) * dt
 
     # plot_mocap_data_per_axes(time_vector, mocap_data)
 

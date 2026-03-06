@@ -4,7 +4,7 @@ import pandas as pd
 from utils import get_names
 from mocap import load_mocap_data, apply_offsets, mm_to_meters, compute_axis_scaling_factors,apply_axis_scaling
 from filters import filter_marker_targets
-from ik import enforce_joint_limits, ik_step_multi_site, solve_ik_for_frame
+from ik import ik_step_multi_site, solve_ik_for_frame
 from visualization import simulation_qpos_trajectory, render_qpos_trajectory_to_video, compute_axis_limits, plot_skeleton_at_frame, plot_joint_trajectories
 from clear_data import clean_mocap_data
 from pathlib import Path
@@ -22,7 +22,7 @@ def main(model_path, mocap_path, qpos_output_path, video_output_path):
     # ---------------- Load mocap data ----------------
     mocap_data = load_mocap_data(data_path=mocap_path)
     joint_names = get_names(mocap_data)
-    # print(joint_names)
+    print(joint_names)
 
     # ---------------- Apply offsets ------------------
     mocap_data = apply_offsets(mocap_data)
@@ -40,7 +40,7 @@ def main(model_path, mocap_path, qpos_output_path, video_output_path):
     y_limits = (y_min, y_max)
     z_limits = (z_min, z_max)
 
-    plot_skeleton_at_frame(mocap_data, joint_names, frame_idx=900, x_limits=x_limits, y_limits=y_limits, z_limits=z_limits)
+    plot_skeleton_at_frame(mocap_data, joint_names, frame_idx=10, x_limits=x_limits, y_limits=y_limits, z_limits=z_limits)
 
     # plot_joint_trajectories(mocap_data, joint_names, x_limits, y_limits, z_limits)
 
@@ -54,24 +54,40 @@ def main(model_path, mocap_path, qpos_output_path, video_output_path):
     print("Number DOF:", model.nv)
 
     all_site_names = [model.site(i).name for i in range(model.nsite)]
-    # # print(all_site_names)
-    #
-    # site_map = {model.site(i).name: i for i in range(model.nsite)}
-    # # print(site_map)
+    print(all_site_names)
+
+    # --------- MuJoCo sites to MoCap marker -----------
+    mujoco_to_mocap = {
+        "greater_trochanter_left": "l_hip_pos",
+        "greater_trochanter_right": "r_hip_pos",
+        "lateral_femoral_epicondyle_left": "l_knee_pos",
+        "lateral_femoral_epicondyle_right": "r_knee_pos",
+        "lateral_maleollus_left": "l_ankle_pos",
+        "lateral_maleollus_right": "r_ankle_pos",
+        "metatarsal_fifth_left": "l_metatarsal_pos",
+        "metatarsal_fifth_right": "r_metatarsal_pos",
+        "acromion_left": "l_shoulder_pos",
+        "acromion_right": "r_shoulder_pos",
+        "lateral_humeral_epicondyle_left": "l_elbow_pos",
+        "lateral_humeral_epicondyle_right": "r_elbow_pos",
+        "ulnar_styloid_left": "l_wrist_pos",
+        "ulnar_styloid_right": "r_wrist_pos"
+    }
 
     # ---------------- Axis scaling ----------------
-    y_scale, z_scale = compute_axis_scaling_factors(
-        model,
-        data,
-        mocap_data,
-        marker_names=[
-            "l_shoulder_pos", "r_shoulder_pos",
-            "l_hip_pos", "r_hip_pos",
-            "l_knee_pos", "r_knee_pos",
-        ]
-    )
+    if str(model_path) == 'human_marina.xml':
+        y_scale, z_scale = compute_axis_scaling_factors(
+            model,
+            data,
+            mocap_data,
+            marker_names=[
+                "l_shoulder_pos", "r_shoulder_pos",
+                "l_hip_pos", "r_hip_pos",
+                "l_knee_pos", "r_knee_pos",
+            ]
+        )
 
-    mocap_data = apply_axis_scaling(mocap_data, y_scale, z_scale)
+        mocap_data = apply_axis_scaling(mocap_data, y_scale, z_scale)
 
     # ---------------- Marker & site configuration ----------------
     # site_names = [
@@ -82,7 +98,10 @@ def main(model_path, mocap_path, qpos_output_path, video_output_path):
     #     "l_ankle_pos", "r_ankle_pos",
     # ]
 
-    site_names = [x for x in all_site_names if (x != 'r_heel_pos' and x != 'l_heel_pos')]
+    if str(model_path) == 'human_marina.xml':
+        site_names = [x for x in all_site_names if (x != 'r_heel_pos' and x != 'l_heel_pos')]
+    else:
+        site_names = [x for x in all_site_names if (x != 'thorax_front_site')]
     # site_names = joint_names
 
     # site_weights = [
@@ -98,10 +117,16 @@ def main(model_path, mocap_path, qpos_output_path, video_output_path):
         for name in site_names
     ]
 
-    marker_column_indices = [
-        mocap_data.columns.get_loc(f"{name}_X")
-        for name in site_names
-    ]
+    if str(model_path) == 'human_marina.xml':
+        marker_column_indices = [
+            mocap_data.columns.get_loc(f"{name}_X")
+            for name in site_names
+        ]
+    else:
+        marker_column_indices = [
+            mocap_data.columns.get_loc(f"{mujoco_to_mocap[name]}_X")
+            for name in site_names
+        ]
 
     # ---------------- Trajectory IK ----------------
     num_frames = mocap_data.shape[0]
