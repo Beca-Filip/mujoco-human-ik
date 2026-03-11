@@ -166,7 +166,7 @@ def clean_mocap_data(mocap_data, dt: float = DT_DEFAULT):
 
     time_vector = np.arange(0, n_samples) * dt
 
-    # plot_mocap_data_per_axes(time_vector, mocap_data)
+    plot_mocap_data_per_axes(time_vector, mocap_data)
 
     cleaned = mocap_data.copy(deep=True)
 
@@ -210,6 +210,6 @@ def clean_mocap_data(mocap_data, dt: float = DT_DEFAULT):
         # plot_cleaned_data(data_Y, cleaned.iloc[:, idx+1], time_vector, corrupted, (marker_name+'_Y'))
         # plot_cleaned_data(data_Z, cleaned.iloc[:, idx+2], time_vector, corrupted, (marker_name+'_Z'))
 
-    # plot_mocap_data_per_axes(time_vector, cleaned)
+    plot_mocap_data_per_axes(time_vector, cleaned)
     return cleaned
 

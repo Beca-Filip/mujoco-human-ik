@@ -5,6 +5,7 @@ from utils import get_names
 from mocap import load_mocap_data, apply_offsets, mm_to_meters, compute_axis_scaling_factors,apply_axis_scaling
 from filters import filter_marker_targets
 from ik import ik_step_multi_site, solve_ik_for_frame
+# from ik_qp import solve_ik_for_frame
 from visualization import simulation_qpos_trajectory, render_qpos_trajectory_to_video, compute_axis_limits, plot_skeleton_at_frame, plot_joint_trajectories
 from clear_data import clean_mocap_data
 from pathlib import Path

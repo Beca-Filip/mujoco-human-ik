@@ -6,6 +6,21 @@ import mujoco as mj
 # -------------------- INVERSE KINEMATICS --------------------
 # ============================================================
 
+def enforce_joint_limits(model: mj.MjModel, data: mj.MjData) -> None:
+    """
+    Clamp joint positions to their physical limits.
+    """
+
+    for joint_id in range(model.njnt):
+        if not model.jnt_limited[joint_id]:
+            continue
+        if model.jnt_type[joint_id] not in (mj.mjtJoint.mjJNT_HINGE, mj.mjtJoint.mjJNT_SLIDE):
+            continue
+        q_adr = model.jnt_qposadr[joint_id]
+        q_min, q_max = model.jnt_range[joint_id]
+        eps = 1e-4
+        data.qpos[q_adr] = np.clip(data.qpos[q_adr], q_min + eps, q_max - eps)
+
 
 def ik_step_multi_site(
     model: mj.MjModel,
@@ -15,9 +30,9 @@ def ik_step_multi_site(
     qpos_reference: np.ndarray,
     site_weights: list[float] | None = None,
     step_size: float = 0.1,
-    damping: float = 1e-1,
+    damping: float = 5e-1,
     regularization: float = 5e-3,
-    beta: float = 1e-3
+    beta: float = 1e-2
 ) -> float:
     """
     Perform a single damped least-squares IK step for multiple sites.
@@ -72,7 +87,7 @@ def ik_step_multi_site(
         if joint_type not in (mj.mjtJoint.mjJNT_HINGE, mj.mjtJoint.mjJNT_SLIDE):
             continue
 
-        q_adr = model.jnt_qposadr[joint_id]
+        q_adr = model.jnt_dofadr[joint_id]
         q = data.qpos[q_adr]
         q_min, q_max = model.jnt_range[joint_id]
 
@@ -81,9 +96,9 @@ def ik_step_multi_site(
 
         eps = 1e-6
         if dist_min < dist_max:
-            W_lim[q_adr-1] = 1.0 / (dist_min ** 2 + eps)
+            W_lim[q_adr] = 1.0 / (dist_min ** 2 + eps)
         else:
-            W_lim[q_adr-1] = 1.0 / (dist_max ** 2 + eps)
+            W_lim[q_adr] = 1.0 / (dist_max ** 2 + eps)
 
     W_lim = np.diag(W_lim)
 
@@ -99,9 +114,13 @@ def ik_step_multi_site(
     rhs = J.T @ error_vector - regularization * dq_prior
 
     dq = np.linalg.solve(system_matrix, rhs)
+    max_step = 0.1
+    dq = np.clip(dq, -max_step, max_step)
 
     # Integrate joint update
     mj.mj_integratePos(model, data.qpos, dq * step_size, 1)
+
+    # enforce_joint_limits(model, data)
 
     return np.linalg.norm(error_vector)
 
