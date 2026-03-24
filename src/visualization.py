@@ -53,7 +53,7 @@ def setup_3d_axis(x_limits, y_limits, z_limits, elev=0, azim=0):
     return fig, ax
 
 
-def plot_skeleton_at_frame(data, joint_names, frame_idx, x_limits, y_limits, z_limits):
+def plot_skeleton_at_frame(data, joint_names, subject_trail, save_plot_flag, frame_idx, x_limits, y_limits, z_limits):
     """
     Plot all joints as a single 3D skeleton for a given frame index.
     """
@@ -66,6 +66,8 @@ def plot_skeleton_at_frame(data, joint_names, frame_idx, x_limits, y_limits, z_l
         ax.scatter(x, y, z)
 
     ax.set_title(f'MoCap skeleton frame {frame_idx}')
+    if save_plot_flag:
+        plt.savefig("MoCap_skeleton_" + subject_trail + ".png")
     plt.show()
 
 
@@ -97,7 +99,7 @@ def simulation_qpos_trajectory(
 
     dt = timestep if timestep is not None else model.opt.timestep
     data = mj.MjData(model)
-
+    # dt = 1/300.0
     # Launch passive viewer for visualization
     with mujoco.viewer.launch_passive(model, data) as viewer:
         for qpos in qpos_trajectory:

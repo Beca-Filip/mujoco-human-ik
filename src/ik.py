@@ -32,7 +32,7 @@ def ik_step_multi_site(
     step_size: float = 0.1,
     damping: float = 5e-1,
     regularization: float = 5e-3,
-    beta: float = 1e-2
+    beta: float = 1e-3
 ) -> float:
     """
     Perform a single damped least-squares IK step for multiple sites.
@@ -87,18 +87,19 @@ def ik_step_multi_site(
         if joint_type not in (mj.mjtJoint.mjJNT_HINGE, mj.mjtJoint.mjJNT_SLIDE):
             continue
 
-        q_adr = model.jnt_dofadr[joint_id]
+        q_adr = model.jnt_qposadr[joint_id]
+        v_adr = model.jnt_dofadr[joint_id]
         q = data.qpos[q_adr]
         q_min, q_max = model.jnt_range[joint_id]
 
         dist_min = q - q_min
         dist_max = q_max - q
 
-        eps = 1e-6
+        eps = 1e-4
         if dist_min < dist_max:
-            W_lim[q_adr] = 1.0 / (dist_min ** 2 + eps)
+            W_lim[v_adr] = 1.0 / (dist_min ** 2 + eps)
         else:
-            W_lim[q_adr] = 1.0 / (dist_max ** 2 + eps)
+            W_lim[v_adr] = 1.0 / (dist_max ** 2 + eps)
 
     W_lim = np.diag(W_lim)
 
@@ -114,13 +115,11 @@ def ik_step_multi_site(
     rhs = J.T @ error_vector - regularization * dq_prior
 
     dq = np.linalg.solve(system_matrix, rhs)
-    max_step = 0.1
-    dq = np.clip(dq, -max_step, max_step)
 
     # Integrate joint update
     mj.mj_integratePos(model, data.qpos, dq * step_size, 1)
 
-    # enforce_joint_limits(model, data)
+    enforce_joint_limits(model, data)
 
     return np.linalg.norm(error_vector)
 

@@ -10,7 +10,7 @@ def filter_marker_targets(
     current_targets: np.ndarray,
     previous_targets: np.ndarray,
     max_delta: float = 0.01,
-    smoothing: float = 0.7
+    smoothing: float = 0.8
 ) -> np.ndarray:
     """
     Temporal filtering and step clamping.
