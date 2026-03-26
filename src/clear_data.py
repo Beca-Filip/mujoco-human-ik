@@ -4,8 +4,8 @@ from matplotlib import pyplot as plt
 from scipy.interpolate import PchipInterpolator
 
 MOCAP_GLITCH_DISTANCE_THRESHOLD = 0.05  # in meters (corresponding to marker velocities of MOCAP_GLITCH_DISTANCE_THRESHOLD / dt)
-MIN_DETECTED_GLITCH_DURATION = 7  # in number of samples
-DT_DEFAULT = 1.0 / 300.0
+MIN_DETECTED_GLITCH_DURATION = 5  # in number of samples
+DT_DEFAULT = 1.0 / 300.0   # 1/fs
 
 
 # ============================================================
@@ -60,6 +60,31 @@ def is_repeating(a: np.ndarray, seq_len: int) -> np.ndarray:
     return flag
 
 
+def glitch_flag(diff_data_bool: np.ndarray, repeating_val_mask: np.ndarray, window: int = 10):
+    """
+    Checking repeating values within a 2x window length neighborhood around diff_data_bool switches
+    to determine the glitch position (before or after the large frame-to-frame jump, switch).
+    """
+    data_len = len(diff_data_bool)
+    glitch_mask = np.zeros(data_len)
+    glitch_switch = np.where(diff_data_bool == 1)[0]
+    previous_switch = 0
+    next_switch = data_len - 1
+    for switch in glitch_switch:
+        before_switch = np.sum(repeating_val_mask[switch - window : switch])
+        after_switch = np.sum(repeating_val_mask[switch : switch + window])
+        left_zeros = after_switch > before_switch
+        if left_zeros:
+            glitch_mask[previous_switch:switch] = 0
+            glitch_mask[switch:next_switch] = 1
+        else:
+            glitch_mask[previous_switch:switch] = 1
+            glitch_mask[switch:next_switch] = 0
+        previous_switch = switch
+
+    return glitch_mask
+
+
 def expand_boolean_mask(mask: np.ndarray, k: int = 2) -> np.ndarray:
     """
     Expand True values in a boolean mask by k samples on both sides.
@@ -77,6 +102,7 @@ def expand_boolean_mask(mask: np.ndarray, k: int = 2) -> np.ndarray:
 
 
 def detect_glitches_1d(
+    marker: str,
     data: np.ndarray,
     distance_threshold: float,
     min_repeating_len: int
@@ -87,34 +113,31 @@ def detect_glitches_1d(
     Glitches are detected using:
     1) Large frame-to-frame jumps
     2) Repeating (flat) values
-
-    The method chooses the segmentation ("inside" vs "outside" jumps)
-    that best correlates with repeating values.
     """
+
     diff_data = np.diff(data)
     diff_data_bool = np.abs(diff_data) > distance_threshold
-    # print(sum(diff_data_bool))
+    diff_data_bool = np.append(diff_data_bool, diff_data_bool[-1])
 
     if not np.any(diff_data_bool):
         return np.zeros(len(data), dtype=int)
 
-    # Segment signal into alternating regions (inside / outside jumps)
-    cumsum = np.cumsum(diff_data_bool.astype(np.int64))
-    region_1 = (cumsum % 2).astype(bool)
-    region_2 = np.logical_not(region_1)
-
-    # Match signal length
-    region_1 = np.append(region_1, region_1[-1])
-    region_2 = np.append(region_2, region_2[-1])
-
     # Detect repeating values
     repeating_mask = is_repeating(data, min_repeating_len)
 
-    # Choose region that best correlates with repeating values
-    corr_1 = np.sum(region_1 * repeating_mask)
-    corr_2 = np.sum(region_2 * repeating_mask)
+    # Find the corrupted segments
+    corrupted = glitch_flag(diff_data_bool, repeating_mask)
 
-    corrupted = region_1 if corr_1 > corr_2 else region_2
+    # fig, ax = plt.subplots(nrows=3, ncols=1)
+    # x_ax_len = np.arange(len(diff_data_bool))
+    # ax[0].plot(x_ax_len, diff_data_bool, label='diff')
+    # ax[0].legend()
+    # ax[1].plot(x_ax_len, repeating_mask, label='repeating_val')
+    # ax[1].legend()
+    # ax[2].plot(x_ax_len, corrupted, label='corrupted')
+    # ax[2].legend()
+    # fig.suptitle(marker)
+    # plt.show()
 
     return expand_boolean_mask(corrupted.astype(int), k=2)
 
@@ -182,20 +205,36 @@ def clean_mocap_data(mocap_data, dt: float = DT_DEFAULT):
         data_Z = mocap_data.loc[:, marker_name + '_Z'].to_numpy()
 
         mask_X = detect_glitches_1d(
+            marker_name,
             data_X,
             MOCAP_GLITCH_DISTANCE_THRESHOLD,
             MIN_DETECTED_GLITCH_DURATION
         )
         mask_Y = detect_glitches_1d(
+            marker_name,
             data_Y,
             MOCAP_GLITCH_DISTANCE_THRESHOLD,
             MIN_DETECTED_GLITCH_DURATION
         )
         mask_Z = detect_glitches_1d(
+            marker_name,
             data_Z,
             MOCAP_GLITCH_DISTANCE_THRESHOLD,
             MIN_DETECTED_GLITCH_DURATION
         )
+
+        # if mask_X.any():
+        #     fig, ax = plt.subplots(nrows=2, ncols=1)
+        #     ax[0].plot(time_vector, mask_X, label='x', linestyle='--')
+        #     ax[0].plot(time_vector, mask_Y, label='y', linestyle='-.')
+        #     ax[0].plot(time_vector, mask_Z, label='z')
+        #     ax[0].legend()
+        #     ax[1].plot(time_vector, data_X, label='datax')
+        #     ax[1].plot(time_vector, data_Y, label='datay')
+        #     ax[1].plot(time_vector, data_Z, label='dataz')
+        #     ax[1].legend()
+        #     fig.suptitle(marker_name)
+        #     plt.show()
 
         corrupted = combine_xyz_glitches(mask_X, mask_Y, mask_Z)
 
@@ -210,6 +249,6 @@ def clean_mocap_data(mocap_data, dt: float = DT_DEFAULT):
         # plot_cleaned_data(data_Y, cleaned.iloc[:, idx+1], time_vector, corrupted, (marker_name+'_Y'))
         # plot_cleaned_data(data_Z, cleaned.iloc[:, idx+2], time_vector, corrupted, (marker_name+'_Z'))
 
-    # plot_mocap_data_per_axes(time_vector, cleaned)
+    plot_mocap_data_per_axes(time_vector, cleaned)
     return cleaned
 
