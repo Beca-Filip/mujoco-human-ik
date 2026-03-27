@@ -1,0 +1,15 @@
+Body Part,Segment Length (m),"Segment mass 
+ (% of total body mass)","X position of center of mass
+(% of segment length)","Y position of center of mass
+(% of segment length)","Z position of center of mass
+(% of segment length)",X Radius of Gyration (% of segment length),Y Radius of Gyration (% of segment length),Z Radius of Gyration (% of segment length),Product of Inetria XY Plane (% of segment length),Product of Inetria XZ Plane (% of segment length),Product of Inetria YZ Plane (% of segment length),segment width,joint limit negative x,joint limit positive x,joint limit negative y,joint limit positive y,joint limit negative z,joint limit positive z
+Foot,0.117,1,38.2,-30.9,5.5,24,50,50,15j,9,5j,0.09,0,0,30,30,20,30
+Shank,0.388,4.5,-4.9,-40.4,3.1,28,10,28,2,1,6,0.095,0,0,0,0,150,0
+Thigh,0.379,14.6,-7.7,-37.7,0.8,31,19,32,7j,2,7j,0.171,20,40,40,50,30,100
+Hand,0.071,0.5,7.7,-76.8,4.8,64,43,59,29,23,28j,0.086,0,0,80,80,60,60
+Forearm,0.247,1.4,2.1,-41.1,1.9,27,14,25,10,3,13j,0.073,0,0,0,0,0,150
+Upper Arm,0.251,2.3,-5.5,-50,-3.3,30,15,30,3j,5,3,0.091,50,180,90,90,50,180
+Pelvis,0.103,14.7,-7.2,-22.8,0.2,95,105,82,35j,3j,2j,0.278,12.5,12.5,15,15,25,12.5
+Abdomen,0.125,4.1,21.9,-41,0.3,65,78,52,25,3j,5j,0.268,12.5,12.5,15,15,25,12.5
+Thorax,0.322,26.3,1.5,-54.2,0.1,38,32,34,12j,3j,1,0.252,0,0,0,0,0,0
+Head with Neck,0.243,6.7,0.8,55.9,-0.1,30,24,31,5j,1,0,0.14,45,45,80,80,60,75

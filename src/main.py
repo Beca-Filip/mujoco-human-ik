@@ -64,6 +64,7 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     # --------------- Load MuJoCo model ---------------
     if model_path is None:
         model_path = generate_human_model(filename=output_xml, mass=subj_weight, height=subj_height, sex=subj_sex, alpha=alpha)
+    print(model_path)
     model = mj.MjModel.from_xml_path(str(model_path))
     data = mj.MjData(model)
     mj.mj_forward(model, data)

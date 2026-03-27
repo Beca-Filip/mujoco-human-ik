@@ -1,0 +1,18 @@
+site name,segment type,"X position of site
+(% of segment length)","Y position of site
+(% of segment length)","Z position of site
+(% of segment length)",segment left/right
+greater_trochanter_left,Thigh,0,0,-50,left_thigh
+greater_trochanter_right,Thigh,0,0,50,right_thigh
+lateral_femoral_epicondyle_left,Thigh,0,-100,-50,left_thigh
+lateral_femoral_epicondyle_right,Thigh,0,-100,50,right_thigh
+lateral_maleollus_left,Shank,0,-100,-50,left_shank
+lateral_maleollus_right,Shank,0,-100,50,right_shank
+metatarsal_fifth_left,Foot,75,0,-50,left_foot
+metatarsal_fifth_right,Foot,75,0,50,right_foot
+acromion_left,Upper Arm,0,20,-20,left_upper_arm
+acromion_right,Upper Arm,0,20,20,right_upper_arm
+lateral_humeral_epicondyle_left,Upper Arm,0,-100,-50,left_upper_arm
+lateral_humeral_epicondyle_right,Upper Arm,0,-100,50,right_upper_arm
+ulnar_styloid_left,Hand,0,0,-50,left_hand
+ulnar_styloid_right,Hand,0,0,50,right_hand
