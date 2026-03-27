@@ -43,8 +43,7 @@ def inverse_dynamics(model: mj.MjModel, qpos: np.ndarray, subj_trail: str, fs: f
     qvel_filtered[:, 0:3] = lowpass_filter(qvel[:, 0:3], fs, wn, N)
     qvel_filtered[:, 6:] = lowpass_filter(qvel[:, 6:], fs, wn, N)
 
-    for t in range(1, T-1):
-        qacc[t] = (qvel_filtered[t+1] - qvel_filtered[t-1]) / (2*dt)
+    qacc[1:T-1] = (qvel_filtered[2:] - qvel_filtered[:-2]) / (2*dt)
 
     qacc[0] = qacc[1]
 
