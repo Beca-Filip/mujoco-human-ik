@@ -46,6 +46,7 @@ def inverse_dynamics(model: mj.MjModel, qpos: np.ndarray, subj_trail: str, fs: f
     qacc[1:T-1] = (qvel_filtered[2:] - qvel_filtered[:-2]) / (2*dt)
 
     qacc[0] = qacc[1]
+    qacc[T-1] = qacc[T-2]
 
     total_grf_left = np.zeros((T, 3))
     total_grf_right = np.zeros((T, 3))
