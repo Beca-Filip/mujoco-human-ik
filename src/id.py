@@ -59,7 +59,6 @@ def inverse_dynamics(model: mj.MjModel, qpos: np.ndarray, subj_trail: str, fs: f
         tau[t, :] = data.qfrc_inverse.copy()
 
         # ------------- Ground reaction force ---------------
-        mj.mj_forward(model, data)
 
         left_foot_body_id = model.body("left_foot").id # model.body_name2id("left_foot")
         right_foot_body_id = model.body("right_foot").id # model.body_name2id("right_foot")
