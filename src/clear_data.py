@@ -249,6 +249,6 @@ def clean_mocap_data(mocap_data, dt: float = DT_DEFAULT):
         # plot_cleaned_data(data_Y, cleaned.iloc[:, idx+1], time_vector, corrupted, (marker_name+'_Y'))
         # plot_cleaned_data(data_Z, cleaned.iloc[:, idx+2], time_vector, corrupted, (marker_name+'_Z'))
 
-    plot_mocap_data_per_axes(time_vector, cleaned)
+    # plot_mocap_data_per_axes(time_vector, cleaned)
     return cleaned
 

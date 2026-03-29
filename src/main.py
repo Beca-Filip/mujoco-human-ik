@@ -23,7 +23,7 @@ DATA_PATH = ROOT_DIR / "data" / "03_1_1_pos.tsv"
 
 
 def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_xml, sampling_freq, filter_order,
-         filter_freq, subj_height, subj_weight, subj_sex, alpha, save_plot_flag):
+         filter_freq, subj_height, subj_mass, subj_sex, alpha, save_plot_flag, inverse_dynamics_flag, sim_pause_flag):
 
     # ---------------- Subject, jump & trail ----------
     parts = mocap_path.parts
@@ -63,8 +63,7 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
 
     # --------------- Load MuJoCo model ---------------
     if model_path is None:
-        model_path = generate_human_model(filename=output_xml, mass=subj_weight, height=subj_height, sex=subj_sex, alpha=alpha)
-    print(model_path)
+        model_path = generate_human_model(filename=output_xml, mass=subj_mass, height=subj_height, sex=subj_sex, alpha=alpha)
     model = mj.MjModel.from_xml_path(str(model_path))
     data = mj.MjData(model)
     mj.mj_forward(model, data)
@@ -211,10 +210,12 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     else:
         print("Video rendering skipped.")
 
-    simulation_qpos_trajectory(model, qpos_trajectory)
+    simulation_qpos_trajectory(model, qpos_trajectory, pause_flag=sim_pause_flag)
 
     # --------------- Inverse dynamics ---------------
-    inverse_dynamics(model, qpos_trajectory, subj_trail, sampling_freq, filter_order, filter_freq, save_plot_flag)
+    if inverse_dynamics_flag:
+        inverse_dynamics(model_path, out_joint_pos_path, subj_trail, sampling_freq, filter_order, filter_freq, save_plot_flag)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="MoCap → MuJoCo IK pipeline")
@@ -282,7 +283,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--subject_weight",
+        "--subject_mass",
         required=True,
         type=float,
         help="Mass of the human who's MJCF we want to generate in kilogram"
@@ -310,6 +311,20 @@ if __name__ == "__main__":
         help="Do you want to save plots?"
     )
 
+    parser.add_argument(
+        "--inverse_dynamics",
+        type=bool,
+        default=True,
+        help="Do the inverse dynamics"
+    )
+
+    parser.add_argument(
+        "--pause_simulation",
+        type=bool,
+        default=False,
+        help="Pause simulation"
+    )
+
     args = parser.parse_args()
 
     mocap_path = args.input_tsv
@@ -320,11 +335,13 @@ if __name__ == "__main__":
     filter_order = args.filter_order
     filter_freq = args.filter_frequency
     subj_height = args.subject_height
-    subj_weight = args.subject_weight
+    subj_mass = args.subject_mass
     subj_sex = args.subject_sex
     alpha = args.alpha
     save_plots = args.save_plots
     model_path = args.input_xml
+    inv_dyn = args.inverse_dynamics
+    sim_pause_flag = args.pause_simulation
 
     main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_xml, sampling_freq, filter_order,
-         filter_freq, subj_height, subj_weight, subj_sex, alpha, save_plots)
+         filter_freq, subj_height, subj_mass, subj_sex, alpha, save_plots, inv_dyn, sim_pause_flag)

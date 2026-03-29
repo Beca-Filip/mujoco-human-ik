@@ -91,7 +91,8 @@ def plot_joint_trajectories(data, joint_names, x_limits, y_limits, z_limits):
 def simulation_qpos_trajectory(
         model: mj.MjModel,
         qpos_trajectory: np.ndarray,
-        timestep: float = None
+        timestep: float = None,
+        pause_flag: bool = False
 ):
     """
     Plays a qpos trajectory in the MuJoCo viewer.
@@ -99,13 +100,15 @@ def simulation_qpos_trajectory(
 
     dt = timestep if timestep is not None else model.opt.timestep
     data = mj.MjData(model)
-    # dt = 1/300.0
     # Launch passive viewer for visualization
     with mujoco.viewer.launch_passive(model, data) as viewer:
-        for qpos in qpos_trajectory:
+        for i, qpos in enumerate(qpos_trajectory):
             data.qpos[:] = qpos
             mj.mj_forward(model, data)
             viewer.sync()
+            if i % 100 == 0 and pause_flag:
+                print("Pause at frame ", i)
+                time.sleep(3)
             time.sleep(dt)
 
 
