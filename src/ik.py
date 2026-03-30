@@ -121,6 +121,43 @@ def ik_step_multi_site(
 
     enforce_joint_limits(model, data)
 
+    mj.mj_forward(model, data)
+
+    left_foot_bodyid = model.body("left_foot").id
+    right_foot_bodyid = model.body("right_foot").id
+
+    radius_left = 0
+    radius_right = 0
+    for i in range(model.ngeom):
+        if model.geom_bodyid[i] == left_foot_bodyid:
+            if model.geom_type[i] == mj.mjtGeom.mjGEOM_CAPSULE:
+                radius_left = model.geom_size[i][0]
+        if model.geom_bodyid[i] == right_foot_bodyid:
+            if model.geom_type[i] == mj.mjtGeom.mjGEOM_CAPSULE:
+                radius_right = model.geom_size[i][0]
+
+    left_meta_site = model.site("metatarsal_fifth_left").id
+    right_meta_site = model.site("metatarsal_fifth_right").id
+
+    if radius_left != 0 and radius_right != 0:
+        left_z = data.site_xpos[left_meta_site][2] - 0.8 * radius_left
+        right_z = data.site_xpos[right_meta_site][2] - 0.8 * radius_right
+
+        ground_height = 0.0
+        correction = 0
+        eps = 1e-6
+
+        if left_z < ground_height - eps:
+            correction = max(correction, ground_height-left_z)
+
+        if right_z < ground_height - eps:
+            correction = max(correction, ground_height-right_z)
+
+        data.qpos[2] += correction
+
+    else:
+        print('Foot geom is not capsule')
+
     return np.linalg.norm(error_vector)
 
 
