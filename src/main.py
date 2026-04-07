@@ -62,6 +62,8 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     # plot_joint_trajectories(mocap_data, marker_names, x_limits, y_limits, z_limits)
 
     # --------------- Load MuJoCo model ---------------
+    if output_xml == 'human.xml':
+        output_xml = 'human_' + subj_trail + '.xml'
     if model_path is None:
         model_path = generate_human_model(filename=output_xml, mass=subj_mass, height=subj_height, sex=subj_sex, alpha=alpha)
     model = mj.MjModel.from_xml_path(str(model_path))
@@ -118,7 +120,9 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     if str(model_path) == 'human_marina.xml':
         site_names = [x for x in all_site_names if (x != 'r_heel_pos' and x != 'l_heel_pos')]
     else:
-        site_names = [x for x in all_site_names if (x != 'thorax_front_site')]
+        site_names = [x for x in all_site_names if (x != 'thorax_front_site' and
+                                                    x != 'under_metatarsal_left' and x != 'under_metatarsal_right' and
+                                                    x != 'under_maleollus_left' and x != 'under_maleollus_right')]
 
     sites_to_weights = {
         "greater_trochanter_left": 1.0,
@@ -239,7 +243,6 @@ if __name__ == "__main__":
         default=None,
         help="qpos CSV"
     )
-
 
     parser.add_argument(
         "--export_video",

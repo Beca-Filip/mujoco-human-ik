@@ -143,9 +143,9 @@ def inverse_dynamics(model_path: Path, qpos_path: Path, subj_trail: str, fs: flo
                 total_grf_right[t,:] += f_world_right
 
 
-    # print("SUM GRF:", total_grf_left[600] + total_grf_right[600])
-    # mass = sum(model.body_mass)
-    # print("Expected:", mass * gravity)
+    print("SUM GRF:", total_grf_left[300] + total_grf_right[300])
+    mass = sum(model.body_mass)
+    print("Expected:", mass * gravity)
 
     time_vector = np.arange(0, T) * dt
 

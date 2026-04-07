@@ -123,40 +123,60 @@ def ik_step_multi_site(
 
     mj.mj_forward(model, data)
 
-    left_foot_bodyid = model.body("left_foot").id
-    right_foot_bodyid = model.body("right_foot").id
+    left_heel_site = model.site("under_maleollus_left").id
+    right_heel_site = model.site("under_maleollus_right").id
+    left_toe_site = model.site("under_metatarsal_left").id
+    right_toe_site = model.site("under_metatarsal_right").id
 
-    radius_left = 0
-    radius_right = 0
-    for i in range(model.ngeom):
-        if model.geom_bodyid[i] == left_foot_bodyid:
-            if model.geom_type[i] == mj.mjtGeom.mjGEOM_CAPSULE:
-                radius_left = model.geom_size[i][0]
-        if model.geom_bodyid[i] == right_foot_bodyid:
-            if model.geom_type[i] == mj.mjtGeom.mjGEOM_CAPSULE:
-                radius_right = model.geom_size[i][0]
+    left_heel_z = data.site_xpos[left_heel_site][2]
+    right_heel_z = data.site_xpos[right_heel_site][2]
+    left_toe_z = data.site_xpos[left_toe_site][2]
+    right_toe_z = data.site_xpos[right_toe_site][2]
 
-    left_meta_site = model.site("metatarsal_fifth_left").id
-    right_meta_site = model.site("metatarsal_fifth_right").id
+    ground_height = 0.0
+    correction = 0
+    eps = 1e-6
 
-    if radius_left != 0 and radius_right != 0:
-        left_z = data.site_xpos[left_meta_site][2] - 0.8 * radius_left
-        right_z = data.site_xpos[right_meta_site][2] - 0.8 * radius_right
+    if (left_heel_z < ground_height - eps or right_heel_z < ground_height - eps or
+            left_toe_z < ground_height - eps or right_toe_z < ground_height - eps):
+        correction = max(correction, ground_height - min(left_heel_z, left_toe_z, right_heel_z, right_toe_z))
 
-        ground_height = 0.0
-        correction = 0
-        eps = 1e-6
+    data.qpos[2] += correction
 
-        if left_z < ground_height - eps:
-            correction = max(correction, ground_height-left_z)
-
-        if right_z < ground_height - eps:
-            correction = max(correction, ground_height-right_z)
-
-        data.qpos[2] += correction
-
-    else:
-        print('Foot geom is not capsule')
+    # left_foot_bodyid = model.body("left_foot").id
+    # right_foot_bodyid = model.body("right_foot").id
+    #
+    # radius_left = 0
+    # radius_right = 0
+    # for i in range(model.ngeom):
+    #     if model.geom_bodyid[i] == left_foot_bodyid:
+    #         if model.geom_type[i] == mj.mjtGeom.mjGEOM_CAPSULE:
+    #             radius_left = model.geom_size[i][0]
+    #     if model.geom_bodyid[i] == right_foot_bodyid:
+    #         if model.geom_type[i] == mj.mjtGeom.mjGEOM_CAPSULE:
+    #             radius_right = model.geom_size[i][0]
+    #
+    # left_meta_site = model.site("metatarsal_fifth_left").id
+    # right_meta_site = model.site("metatarsal_fifth_right").id
+    #
+    # if radius_left != 0 and radius_right != 0:
+    #     left_z = data.site_xpos[left_meta_site][2] - 0.55 * radius_left
+    #     right_z = data.site_xpos[right_meta_site][2] - 0.55 * radius_right
+    #
+    #     ground_height = 0.0
+    #     correction = 0
+    #     eps = 1e-6
+    #
+    #     if left_z < ground_height - eps:
+    #         correction = max(correction, ground_height-left_z)
+    #
+    #     if right_z < ground_height - eps:
+    #         correction = max(correction, ground_height-right_z)
+    #
+    #     data.qpos[2] += correction
+    #
+    # else:
+    #     print('Foot geom is not capsule')
 
     return np.linalg.norm(error_vector)
 
