@@ -4,8 +4,9 @@ import pandas as pd
 from utils import get_names
 from mocap import load_mocap_data, apply_offsets, mm_to_meters, compute_axis_scaling_factors,apply_axis_scaling
 from filters import filter_marker_targets
-from ik import ik_step_multi_site, solve_ik_for_frame
+# from ik import ik_step_multi_site, solve_ik_for_frame
 # from ik_qp import solve_ik_for_frame
+from ik_symmetry import solve_ik_for_frame
 from visualization import simulation_qpos_trajectory, render_qpos_trajectory_to_video, compute_axis_limits, plot_skeleton_at_frame, plot_joint_trajectories
 from clear_data import clean_mocap_data
 from pathlib import Path
@@ -63,7 +64,7 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
 
     # --------------- Load MuJoCo model ---------------
     if output_xml == 'human.xml':
-        output_xml = 'human_' + subj_trail + '.xml'
+        output_xml = 'human_' + subj_trail[0:2] + '.xml'
     if model_path is None:
         model_path = generate_human_model(filename=output_xml, mass=subj_mass, height=subj_height, sex=subj_sex, alpha=alpha)
     model = mj.MjModel.from_xml_path(str(model_path))
