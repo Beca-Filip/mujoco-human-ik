@@ -2,7 +2,7 @@ import numpy as np
 import mujoco as mj
 import pandas as pd
 from utils import get_names
-from mocap import load_mocap_data, apply_offsets, mm_to_meters, compute_axis_scaling_factors,apply_axis_scaling
+from mocap import load_mocap_data, apply_offsets, mm_to_meters, compute_axis_scaling_factors,apply_axis_scaling, averaging_z_coord
 from filters import filter_marker_targets
 # from ik import ik_step_multi_site, solve_ik_for_frame
 # from ik_qp import solve_ik_for_frame
@@ -34,7 +34,6 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     # ---------------- Load mocap data ----------------
     mocap_data = load_mocap_data(data_path=mocap_path)
     marker_names = get_names(mocap_data)
-    # print(marker_names)
 
     # ---------------- Apply offsets ------------------
     mocap_data = apply_offsets(mocap_data)
@@ -51,14 +50,18 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
         print("Corrupted MoCap data.")
         print(problems)
 
+    # ------------- Averaging z axis ------------------
+    mocap_data_avr = averaging_z_coord(mocap_data, 'l_metatarsal_pos_Z', 'r_metatarsal_pos_Z')
+    mocap_data_avr = averaging_z_coord(mocap_data_avr, 'l_ankle_pos_Z', 'r_ankle_pos_Z')
+
     # --------------- Plot MoCap data -----------------
     # Compute shared axis limits once
-    x_min, x_max, y_min, y_max, z_min, z_max = compute_axis_limits(mocap_data)
+    x_min, x_max, y_min, y_max, z_min, z_max = compute_axis_limits(mocap_data_avr)
     x_limits = (x_min, x_max)
     y_limits = (y_min, y_max)
     z_limits = (z_min, z_max)
 
-    plot_skeleton_at_frame(mocap_data, marker_names, subj_trail, save_plot_flag, frame_idx=10, x_limits=x_limits, y_limits=y_limits, z_limits=z_limits)
+    plot_skeleton_at_frame(mocap_data_avr, marker_names, subj_trail, save_plot_flag, frame_idx=10, x_limits=x_limits, y_limits=y_limits, z_limits=z_limits)
 
     # plot_joint_trajectories(mocap_data, marker_names, x_limits, y_limits, z_limits)
 
@@ -107,7 +110,7 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
         y_scale, z_scale = compute_axis_scaling_factors(
             model,
             data,
-            mocap_data,
+            mocap_data_avr,
             marker_names=[
                 "l_shoulder_pos", "r_shoulder_pos",
                 "l_hip_pos", "r_hip_pos",
@@ -115,7 +118,7 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
             ]
         )
 
-        mocap_data = apply_axis_scaling(mocap_data, y_scale, z_scale)
+        mocap_data_avr = apply_axis_scaling(mocap_data_avr, y_scale, z_scale)
 
     # ---------------- Marker & site configuration ----------------
     if str(model_path) == 'human_marina.xml':
@@ -132,8 +135,8 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
         "lateral_femoral_epicondyle_right": 1.0,
         "lateral_maleollus_left": 2.0,
         "lateral_maleollus_right": 2.0,
-        "metatarsal_fifth_left": 1.0,
-        "metatarsal_fifth_right": 1.0,
+        "metatarsal_fifth_left": 5.0,
+        "metatarsal_fifth_right": 5.0,
         "acromion_left": 1.0,
         "acromion_right": 1.0,
         "lateral_humeral_epicondyle_left": 1.0,
@@ -153,17 +156,17 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
 
     if str(model_path) == 'human_marina.xml':
         marker_column_indices = [
-            mocap_data.columns.get_loc(f"{name}_X")
+            mocap_data_avr.columns.get_loc(f"{name}_X")
             for name in site_names
         ]
     else:
         marker_column_indices = [
-            mocap_data.columns.get_loc(f"{mujoco_to_mocap[name]}_X")
+            mocap_data_avr.columns.get_loc(f"{mujoco_to_mocap[name]}_X")
             for name in site_names
         ]
 
     # ---------------- Trajectory IK ----------------
-    num_frames = mocap_data.shape[0]
+    num_frames = mocap_data_avr.shape[0]
     qpos_trajectory = np.zeros((num_frames, model.nq))
 
     # data.qpos[:] = 0.0
@@ -174,7 +177,7 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     # print(qpos_trajectory[0])
 
     previous_targets = np.array([
-        mocap_data.iloc[0, idx:idx + 3].to_numpy()
+        mocap_data_avr.iloc[0, idx:idx + 3].to_numpy()
         for idx in marker_column_indices
     ])
 
@@ -182,7 +185,7 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
         print(f"Frame {frame_idx}")
 
         current_targets = np.array([
-            mocap_data.iloc[frame_idx, idx:idx + 3].to_numpy()
+            mocap_data_avr.iloc[frame_idx, idx:idx + 3].to_numpy()
             for idx in marker_column_indices
         ])
 

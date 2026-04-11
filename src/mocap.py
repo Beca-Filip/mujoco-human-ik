@@ -97,3 +97,13 @@ def apply_axis_scaling(
             mocap_data.loc[:, col_name] *= z_scale
 
     return mocap_data
+
+
+def averaging_z_coord(mocap_data: pd.DataFrame, left_joint_name, right_joint_name):
+    l_z = mocap_data.loc[:, left_joint_name]
+    r_z = mocap_data.loc[:, right_joint_name]
+    z_avr = (l_z + r_z) / 2
+    mocap_data_avr = mocap_data.copy()
+    mocap_data_avr.loc[:, left_joint_name] = z_avr
+    mocap_data_avr.loc[:, right_joint_name] = z_avr
+    return mocap_data_avr
