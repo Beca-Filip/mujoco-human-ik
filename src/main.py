@@ -10,10 +10,11 @@ from ik_symmetry import solve_ik_for_frame
 from visualization import simulation_qpos_trajectory, render_qpos_trajectory_to_video, compute_axis_limits, plot_skeleton_at_frame, plot_joint_trajectories
 from clear_data import clean_mocap_data
 from pathlib import Path
+import os
 import argparse
 from id import inverse_dynamics
 from generate_human_model import generate_human_model
-from detecting_corrupted_mocap import filter_markers_from_pairs
+from detecting_corrupted_mocap import filter_markers_from_pairs, constant_values
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_PATH = ROOT_DIR / "data" / "03_1_1_pos.tsv"
@@ -24,15 +25,36 @@ DATA_PATH = ROOT_DIR / "data" / "03_1_1_pos.tsv"
 
 
 def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_xml, sampling_freq, filter_order,
-         filter_freq, subj_height, subj_mass, subj_sex, alpha, save_plot_flag, inverse_dynamics_flag, sim_pause_flag):
+         filter_freq, subj_height, subj_mass, subj_sex, alpha, save_plot_flag, inverse_dynamics_flag, sim_flag,
+         sim_pause_flag, error_txt_path, print_flag=False, results_dir='Results', error_txt_file=None):
+
+    # Create a TXT file for collecting potential errors in MoCap data
+    flag_file_errors_exists = False
+    if error_txt_file is None:
+        with open(error_txt_path, "w") as error_txt_file:
+            error_txt_file.write('Failed mocaps:\n\n')
+        flag_file_errors_exists = True
 
     # ---------------- Subject, jump & trail ----------
     parts = mocap_path.parts
     subj_trail = parts[1][0:6]
-    # print(subj_trail)
 
     # ---------------- Load mocap data ----------------
     mocap_data = load_mocap_data(data_path=mocap_path)
+    if mocap_data is None:
+        if flag_file_errors_exists is True:
+            with open(error_txt_path, "a") as error_txt_file:
+                error_txt_file.write(str(mocap_path) + '-> ' + "Empty file" + '\n')
+        else:
+            error_txt_file.write(str(mocap_path) + '-> ' + "Empty file" + '\n')
+        return
+    if mocap_data is True:
+        if flag_file_errors_exists is True:
+            with open(error_txt_path, "a") as error_txt_file:
+                error_txt_file.write(str(mocap_path) + '-> ' + "Incorrect number of markers" + '\n')
+        else:
+            error_txt_file.write(str(mocap_path) + '-> ' + "Incorrect number of markers" + '\n')
+        return
     marker_names = get_names(mocap_data)
 
     # ---------------- Apply offsets ------------------
@@ -47,8 +69,23 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     # ---------------- Checking data ------------------
     problems, corr_flag = filter_markers_from_pairs(mocap_data, dev_threshold=0.3)
     if corr_flag:
-        print("Corrupted MoCap data.")
-        print(problems)
+        if flag_file_errors_exists is True:
+            with open(error_txt_path, "a") as error_txt_file:
+                error_txt_file.write(str(mocap_path) + '-> ' + "Potentially corrupted MoCap data" + '\n')
+        else:
+            error_txt_file.write(str(mocap_path) + '-> ' + "Potentially corrupted MoCap data" + '\n')
+        if print_flag:
+            print("Corrupted MoCap data.")
+
+    const_markers, const_flag = constant_values(mocap_data)
+    if const_flag:
+        if flag_file_errors_exists is True:
+            with open(error_txt_path, "a") as error_txt_file:
+                error_txt_file.write(str(mocap_path) + '-> Same value across all frames of those markers' + str(const_markers) + '\n')
+        else:
+            error_txt_file.write(str(mocap_path) + '-> Same value across all frames of those markers' + str(const_markers) + '\n')
+        if print_flag:
+            print("Corrupted MoCap data.")
 
     # ------------- Averaging z axis ------------------
     mocap_data_avr = averaging_z_coord(mocap_data, 'l_metatarsal_pos_Z', 'r_metatarsal_pos_Z')
@@ -74,18 +111,21 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     data = mj.MjData(model)
     mj.mj_forward(model, data)
 
-    print("Number qpos:", model.nq)
-    print("Number site:", model.nsite)
-    print("Number DOF:", model.nv)
-    print("Number of joints ", model.njnt)
+    if print_flag:
+        print("Number qpos:", model.nq)
+        print("Number site:", model.nsite)
+        print("Number DOF:", model.nv)
+        print("Number of joints ", model.njnt)
 
     for i in range(model.ngeom):
         body_id = model.geom_bodyid[i]
-        # print('geom_id: ', i, 'body_id: ', body_id,
-        #       'body_name: ', model.body(body_id).name, ', geom_type: ', model.geom(i).type)
+        if print_flag:
+            print('geom_id: ', i, 'body_id: ', body_id,
+                  'body_name: ', model.body(body_id).name, ', geom_type: ', model.geom(i).type)
 
     all_site_names = [model.site(i).name for i in range(model.nsite)]
-    # print(all_site_names)
+    if print_flag:
+        print('Site names: \n', all_site_names)
 
     # --------- MuJoCo sites to MoCap marker -----------
     mujoco_to_mocap = {
@@ -135,8 +175,8 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
         "lateral_femoral_epicondyle_right": 1.0,
         "lateral_maleollus_left": 2.0,
         "lateral_maleollus_right": 2.0,
-        "metatarsal_fifth_left": 5.0,
-        "metatarsal_fifth_right": 5.0,
+        "metatarsal_fifth_left": 10.0,
+        "metatarsal_fifth_right": 10.0,
         "acromion_left": 1.0,
         "acromion_right": 1.0,
         "lateral_humeral_epicondyle_left": 1.0,
@@ -146,8 +186,8 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     }
 
     site_weights = [sites_to_weights[name] for name in site_names]
-    # print(site_names)
-    # print(site_weights)
+    if print_flag:
+        print('Site weights: \n', site_weights)
 
     site_ids = [
         mj.mj_name2id(model, mj.mjtObj.mjOBJ_SITE, name)
@@ -169,12 +209,7 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     num_frames = mocap_data_avr.shape[0]
     qpos_trajectory = np.zeros((num_frames, model.nq))
 
-    # data.qpos[:] = 0.0
     mj.mj_forward(model, data)
-
-    # qpos_trajectory[0] = data.qpos.copy()
-    # np.set_printoptions(threshold=np.inf)
-    # print(qpos_trajectory[0])
 
     previous_targets = np.array([
         mocap_data_avr.iloc[0, idx:idx + 3].to_numpy()
@@ -182,7 +217,8 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     ])
 
     for frame_idx in range(num_frames):
-        print(f"Frame {frame_idx}")
+        if print_flag:
+            print(f"Frame {frame_idx}")
 
         current_targets = np.array([
             mocap_data_avr.iloc[frame_idx, idx:idx + 3].to_numpy()
@@ -209,20 +245,27 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     if out_joint_pos_path is None:
         out_joint_pos_path = "qpos_" + subj_trail + ".csv"
     df_qpos = pd.DataFrame(qpos_trajectory)
-    df_qpos.to_csv(str(out_joint_pos_path), index=False)
-    print(f"Saved qpos to {out_joint_pos_path}")
+    dir_path = Path(os.path.join(results_dir, Path('qpos')))
+    dir_path.mkdir(parents=True, exist_ok=True)
+    total_qpos_path = os.path.join(dir_path, out_joint_pos_path)
+    df_qpos.to_csv(str(total_qpos_path), index=False)
+    if print_flag:
+        print(f"Saved qpos to {total_qpos_path}")
 
     # ---------------- Render video ----------------
     if output_video_path is not None:
-        render_qpos_trajectory_to_video(model, qpos_trajectory, str(output_video_path))
+        total_video_path = os.path.join(results_dir, Path('Videos'), output_video_path)
+        render_qpos_trajectory_to_video(model, qpos_trajectory, str(total_video_path))
     else:
-        print("Video rendering skipped.")
+        if print_flag:
+            print("Video rendering skipped.")
 
-    simulation_qpos_trajectory(model, qpos_trajectory, pause_flag=sim_pause_flag)
+    if sim_flag:
+        simulation_qpos_trajectory(model, qpos_trajectory, pause_flag=sim_pause_flag)
 
     # --------------- Inverse dynamics ---------------
     if inverse_dynamics_flag:
-        inverse_dynamics(model_path, out_joint_pos_path, subj_trail, sampling_freq, filter_order, filter_freq, save_plot_flag)
+        inverse_dynamics(model_path, Path(total_qpos_path)  , subj_trail, sampling_freq, filter_order, filter_freq, save_plot_flag, results_dir, print_flag)
 
 
 if __name__ == "__main__":
@@ -326,10 +369,38 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--simulation",
+        type=bool,
+        default=False,
+        help="Playing simulation? [True/False]"
+    )
+
+    parser.add_argument(
         "--pause_simulation",
         type=bool,
         default=False,
         help="Pause simulation"
+    )
+
+    parser.add_argument(
+        "--error_txt",
+        type=Path,
+        default="failed_mocaps.txt",
+        help="Path to TXT file for catching errors"
+    )
+
+    parser.add_argument(
+        "--print_flag",
+        type=bool,
+        default=False,
+        help="Do you want to print text info?"
+    )
+
+    parser.add_argument(
+        "--results_dir",
+        type=Path,
+        default='Results',
+        help="Path to directory for results"
     )
 
     args = parser.parse_args()
@@ -348,7 +419,11 @@ if __name__ == "__main__":
     save_plots = args.save_plots
     model_path = args.input_xml
     inv_dyn = args.inverse_dynamics
+    simulation_flag = args.simulation
     sim_pause_flag = args.pause_simulation
+    error_txt = args.error_txt
+    print_flag = args.print_flag
+    results_dir = args.results_dir
 
     main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_xml, sampling_freq, filter_order,
-         filter_freq, subj_height, subj_mass, subj_sex, alpha, save_plots, inv_dyn, sim_pause_flag)
+         filter_freq, subj_height, subj_mass, subj_sex, alpha, save_plots, inv_dyn, simulation_flag, sim_pause_flag, error_txt, print_flag, results_dir)

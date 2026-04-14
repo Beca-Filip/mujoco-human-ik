@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import mujoco as mj
 import mujoco.viewer
 import imageio
+from pathlib import Path
+import os
 
 MOCAP_SAMPLING_FREQ = 300.
 MOCAP_SAMPLING_TIME = 1. / MOCAP_SAMPLING_FREQ
@@ -67,8 +69,14 @@ def plot_skeleton_at_frame(data, joint_names, subject_trail, save_plot_flag, fra
 
     ax.set_title(f'MoCap skeleton frame {frame_idx}')
     if save_plot_flag:
-        plt.savefig("MoCap_skeleton_" + subject_trail + ".png")
-    plt.show()
+        save_path_skeleton = "MoCap_skeleton_" + subject_trail + ".png"
+        dir_path = Path(os.path.join(Path('Results'), Path('MoCap skeleton')))
+        dir_path.mkdir(parents=True, exist_ok=True)
+        total_skeleton_path = os.path.join(dir_path, save_path_skeleton)
+        plt.savefig(total_skeleton_path)
+        plt.close()
+    #plt.show()
+    plt.close()
 
 
 def plot_joint_trajectories(data, joint_names, x_limits, y_limits, z_limits):

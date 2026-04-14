@@ -7,6 +7,7 @@ from scipy.signal import butter, filtfilt
 from scipy.fft import fft, fftfreq
 import argparse
 from pathlib import Path
+import os
 
 # ============================================================
 # -------------------- INVERSE DYNAMICS ----------------------
@@ -48,14 +49,15 @@ def fourier_transform(signal, fs, signal_name):
 
 
 def inverse_dynamics(model_path: Path, qpos_path: Path, subj_trail: str, fs: float = 300.0, N: int = 3,
-                     wn: float = 10.0, save_plot_flag: bool = False, gravity: float = 9.81):
+                     wn: float = 10.0, save_plot_flag: bool = False, results_dir: Path = 'Results', print_flag: bool = False, gravity: float = 9.81):
     model = mj.MjModel.from_xml_path(str(model_path))
     data = mj.MjData(model)
     mj.mj_forward(model, data)
     qpos = pd.read_csv(qpos_path)
     qpos = qpos.to_numpy()
     if subj_trail is None:
-        subj_trail = str(qpos_path)[5:11]
+        subj_parts = qpos_path.parts
+        subj_trail = subj_parts[2][5:11]
     T = qpos.shape[0]
     nv = model.nv
     dt = 1/fs
@@ -142,28 +144,41 @@ def inverse_dynamics(model_path: Path, qpos_path: Path, subj_trail: str, fs: flo
 
                 total_grf_right[t,:] += f_world_right
 
-
-    print("SUM GRF:", total_grf_left[300] + total_grf_right[300])
+    grf_frame_mass = int(T / 5)
     mass = sum(model.body_mass)
-    print("Expected:", mass * gravity)
+    BW = total_grf_left[grf_frame_mass, 2] + total_grf_right[grf_frame_mass, 2]
+    if print_flag:
+        print("SUM GRF:", BW)   # ~300th frame
+        print("Expected:", mass * gravity)
 
     time_vector = np.arange(0, T) * dt
-
     fig, ax = plt.subplots(nrows=2, ncols=1)
     fig.suptitle('GRF')
     ax[0].plot(time_vector, total_grf_left[:,0], label='grf_x_left')
     ax[0].plot(time_vector, total_grf_left[:,1], label='grf_y_left')
     ax[0].plot(time_vector, total_grf_left[:,2], label='grf_z_left')
     ax[0].legend()
+    ax[0].set_ylabel('Force [N]')
+    plt.text(0.75, 2.3, f'BW = {BW:.2f} [N]',
+             transform=plt.gca().transAxes,
+             bbox=dict(facecolor='white', alpha=0.8))
     ax[1].plot(time_vector, total_grf_right[:, 0], label='grf_x_right')
     ax[1].plot(time_vector, total_grf_right[:, 1], label='grf_y_right')
     ax[1].plot(time_vector, total_grf_right[:, 2], label='grf_z_right')
     ax[1].legend()
+    ax[1].set_xlabel('t [sec]')
+    ax[1].set_ylabel('Force [N]')
     if save_plot_flag:
         save_path_GRF = "GRF_" + subj_trail + ".png"
-        plt.savefig(save_path_GRF)
-        print(f"GRF plot saved to {save_path_GRF}")
-    plt.show()
+        dir_path = Path(os.path.join(results_dir, Path('GRF')))
+        dir_path.mkdir(parents=True, exist_ok=True)
+        total_GRF_path = os.path.join(dir_path, save_path_GRF)
+        plt.savefig(total_GRF_path)
+        plt.close()
+        if print_flag:
+            print(f"GRF plot saved to {total_GRF_path}")
+    #plt.show()
+    plt.close()
 
     # for i in range(6, nv):
     #     joint_id = model.dof_jntid[i]
@@ -180,36 +195,36 @@ def inverse_dynamics(model_path: Path, qpos_path: Path, subj_trail: str, fs: flo
     #     ax[2].legend()
     #     plt.show()
 
-
-
-    for i in range(6, nv):
-        joint_id = model.dof_jntid[i]
-        joint_name = mj.mj_id2name(model, mj.mjtObj.mjOBJ_JOINT, joint_id)
-
-        plt.plot(time_vector, qpos_filtered[:, i+1], label=joint_name)
-        plt.legend()
-        plt.title('Joint angles')
-
-    if save_plot_flag:
-        save_path_qpos = "joint_angles_" + subj_trail + ".png"
-        plt.savefig(save_path_qpos)
-        print(f"Joint angles plot saved to {save_path_qpos}")
-    plt.show()
-
-    for i in range(6, nv):
-        joint_id = model.dof_jntid[i]
-        joint_name = mj.mj_id2name(model, mj.mjtObj.mjOBJ_JOINT, joint_id)
-
-        plt.plot(time_vector, tau[:, i], label=joint_name)
-        plt.xlim([1.5, time_vector[-1]])
-        plt.legend()
-        plt.title('Joint moments')
-
-    if save_plot_flag:
-        save_path_tau = "joint_moments_" + subj_trail + ".png"
-        plt.savefig(save_path_tau)
-        print(f"Joint moments plot saved to {save_path_tau}")
-    plt.show()
+    # for i in range(6, nv):
+    #     joint_id = model.dof_jntid[i]
+    #     joint_name = mj.mj_id2name(model, mj.mjtObj.mjOBJ_JOINT, joint_id)
+    #
+    #     plt.plot(time_vector, qpos_filtered[:, i+1], label=joint_name)
+    #     plt.legend()
+    #     plt.title('Joint angles')
+    #
+    # if save_plot_flag:
+    #     save_path_qpos = "joint_angles_" + subj_trail + ".png"
+    #     plt.savefig(save_path_qpos)
+    #     if print_flag:
+    #         print(f"Joint angles plot saved to {save_path_qpos}")
+    # plt.show()
+    #
+    # for i in range(6, nv):
+    #     joint_id = model.dof_jntid[i]
+    #     joint_name = mj.mj_id2name(model, mj.mjtObj.mjOBJ_JOINT, joint_id)
+    #
+    #     plt.plot(time_vector, tau[:, i], label=joint_name)
+    #     plt.xlim([1.5, time_vector[-1]])
+    #     plt.legend()
+    #     plt.title('Joint moments')
+    #
+    # if save_plot_flag:
+    #     save_path_tau = "joint_moments_" + subj_trail + ".png"
+    #     plt.savefig(save_path_tau)
+    #     if print_flag:
+    #         print(f"Joint moments plot saved to {save_path_tau}")
+    # plt.show()
 
 
 def parse_id():

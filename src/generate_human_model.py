@@ -168,7 +168,7 @@ def generate_human_model(filename : str, mass : float, height : float, sex : str
     ET.SubElement(visual, "global", offwidth="2560", offheight="1440", elevation="-20", azimuth="120")
     contact = ET.SubElement(mujoco, "contact")
     worldbody = ET.SubElement(mujoco, "worldbody")
-    ET.SubElement(worldbody, "geom", name="floor", type="plane", size="1 1 .1", rgba=".8 .8 .8 1", solref="0.01 1", solimp="0.8 0.9 0.01")
+    ET.SubElement(worldbody, "geom", name="floor", type="plane", size="1 1 .1", rgba=".8 .8 .8 1", solref="0.02 1", solimp="0.85 0.95 0.005")
     ET.SubElement(worldbody, "light", diffuse=".8 .8 .8", pos="0 0 3", dir="0 0 -1")
     ET.SubElement(mujoco, "option", gravity="0 0 -9.81")
 
@@ -247,7 +247,7 @@ def generate_human_model(filename : str, mass : float, height : float, sex : str
     ET.SubElement(contact, "exclude", body1="left_shank", body2="left_foot")
     ET.SubElement(left_foot, "joint", name="left_ankle_y", type="hinge", axis="0 1 0", pos="0 0 0", range=f"{-joint_limit_negative_y_dict['Foot']} {joint_limit_positive_y_dict['Foot']}")
     ET.SubElement(left_foot, "joint", name="left_ankle_z", type="hinge", axis="0 0 1", pos="0 0 0", range=f"{-joint_limit_negative_z_dict['Foot']} {joint_limit_positive_z_dict['Foot']}")
-    ET.SubElement(left_foot, "geom", type="capsule", size=f"{widths_dict['Foot']/2} {lengths_dict['Foot']/2-widths_dict['Foot']/4}", pos = f"{lengths_dict['Foot']/2} 0 0", euler="0 90 0", rgba=rgba_in, solref="0.01 1", solimp="0.8 0.9 0.01")
+    ET.SubElement(left_foot, "geom", type="capsule", size=f"{widths_dict['Foot']/2} {lengths_dict['Foot']/2-widths_dict['Foot']/4}", pos = f"{lengths_dict['Foot']/2} 0 0", euler="0 90 0", rgba=rgba_in, solref="0.02 1", solimp="0.85 0.95 0.005")
     ET.SubElement(left_foot, "inertial", mass=f"{mass_dict['Foot']}", pos=f"{com_pos_x_dict['Foot']} {com_pos_y_dict['Foot']} {-com_pos_z_dict['Foot']}", fullinertia=f"{I11_dict['Foot']} {I22_dict['Foot']} {I33_dict['Foot']} {I12_dict['Foot']} {-I13_dict['Foot']} {-I23_dict['Foot']}")
 
     # Right foot
@@ -255,7 +255,7 @@ def generate_human_model(filename : str, mass : float, height : float, sex : str
     ET.SubElement(contact, "exclude", body1="right_shank", body2="right_foot")
     ET.SubElement(right_foot, "joint", name="right_ankle_y", type="hinge", axis="0 1 0", pos="0 0 0", range=f"{-joint_limit_negative_y_dict['Foot']} {joint_limit_positive_y_dict['Foot']}")
     ET.SubElement(right_foot, "joint", name="right_ankle_z", type="hinge", axis="0 0 1", pos="0 0 0", range=f"{-joint_limit_negative_z_dict['Foot']} {joint_limit_positive_z_dict['Foot']}")
-    ET.SubElement(right_foot, "geom", type="capsule", size=f"{widths_dict['Foot']/2} {lengths_dict['Foot']/2-widths_dict['Foot']/4}", pos = f"{lengths_dict['Foot']/2} 0 0", euler="0 90 0", rgba=rgba_in, solref="0.01 1", solimp="0.8 0.9 0.01")
+    ET.SubElement(right_foot, "geom", type="capsule", size=f"{widths_dict['Foot']/2} {lengths_dict['Foot']/2-widths_dict['Foot']/4}", pos = f"{lengths_dict['Foot']/2} 0 0", euler="0 90 0", rgba=rgba_in, solref="0.02 1", solimp="0.85 0.95 0.005")
     ET.SubElement(right_foot, "inertial", mass=f"{mass_dict['Foot']}", pos=f"{com_pos_x_dict['Foot']} {com_pos_y_dict['Foot']} {com_pos_z_dict['Foot']}", fullinertia=f"{I11_dict['Foot']} {I22_dict['Foot']} {I33_dict['Foot']} {I12_dict['Foot']} {I13_dict['Foot']} {I23_dict['Foot']}")
 
     # Left upper arm

@@ -3,9 +3,24 @@ import numpy as np
 import pandas as pd
 from collections import defaultdict
 
+# ============================================================
+# --------------- DETECTING PROBLEMATIC MOCAP ----------------
+# ============================================================
+
+
+def constant_values(df: pd.DataFrame):
+    constant_flag = False
+    constant_markers = []
+    for col in df.columns:
+        if df[col].nunique() == 1:
+            constant_flag = True
+            constant_markers.append(col)
+    return constant_markers, constant_flag
+
 
 def get_marker_array(df, marker_name):
     return df[[f"{marker_name}_X", f"{marker_name}_Y", f"{marker_name}_Z"]].values
+
 
 def filter_markers_from_pairs(df: pd.DataFrame, dev_threshold=0.3,
                               length_threshold=None,

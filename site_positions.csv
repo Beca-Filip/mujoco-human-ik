@@ -16,7 +16,3 @@ lateral_humeral_epicondyle_left,Upper Arm,0,-100,-50,left_upper_arm
 lateral_humeral_epicondyle_right,Upper Arm,0,-100,50,right_upper_arm
 ulnar_styloid_left,Hand,0,0,-50,left_hand
 ulnar_styloid_right,Hand,0,0,50,right_hand
-under_metatarsal_left,Foot,90,-33,0,left_foot
-under_metatarsal_right,Foot,90,-33,0,right_foot
-under_maleollus_left,Foot,10,-33,0,left_foot
-under_maleollus_right,Foot,10,-33,0,right_foot

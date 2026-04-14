@@ -13,7 +13,7 @@ def load_mocap_data(
     data_path: str,
     separator: str = "\t",
     header_row: int = 5,
-    data_start_row: int = 8,
+    data_start_row: int = 8
 ) -> pd.DataFrame:
     """
     Load motion capture data from a TSV file.
