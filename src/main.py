@@ -115,7 +115,8 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
         print("Number qpos:", model.nq)
         print("Number site:", model.nsite)
         print("Number DOF:", model.nv)
-        print("Number of joints ", model.njnt)
+        print("Number of joints: ", model.njnt)
+        print("Number of frames: ", mocap_data_avr.shape[0])
 
     for i in range(model.ngeom):
         body_id = model.geom_bodyid[i]
