@@ -3,6 +3,9 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.interpolate import PchipInterpolator
 
+from pathlib import Path
+import os
+
 MOCAP_GLITCH_DISTANCE_THRESHOLD = 0.05  # in meters (corresponding to marker velocities of MOCAP_GLITCH_DISTANCE_THRESHOLD / dt)
 MIN_DETECTED_GLITCH_DURATION = 5  # in number of samples
 DT_DEFAULT = 1.0 / 300.0   # 1/fs
@@ -28,14 +31,20 @@ def plot_mocap_data_per_axes(time_vector, mocap_data):
         ax[0].set_title("Mocap data per axes")
 
 
-def plot_cleaned_data(data, cleaned_data, time_vector, corrupted, title):
+def plot_cleaned_data(data, cleaned_data, time_vector, corrupted, title, subj_trial):
+    save_path_clean = subj_trial + '_' + title + ".png"
+    dir_path = Path(os.path.join(Path('Results'), Path('Clean_MoCap')))
+    dir_path.mkdir(parents=True, exist_ok=True)
+    total_clean_path = os.path.join(dir_path, save_path_clean)
     fig, ax = plt.subplots(figsize=(19.2, 10.8), nrows=2, ncols=1)
     ax[0].plot(time_vector, data, linestyle='--', label='Original')
     ax[0].plot(time_vector, cleaned_data, label='Cleaned')
     ax[0].legend()
     ax[1].plot(time_vector, corrupted, linestyle='-.', label='Corrupted')
     ax[0].set_title(title)
-    plt.show()
+    plt.savefig(total_clean_path)
+    plt.close()
+    #plt.show()
 
 
 def is_repeating(a: np.ndarray, seq_len: int) -> np.ndarray:
@@ -66,11 +75,22 @@ def glitch_flag(diff_data_bool: np.ndarray, repeating_val_mask: np.ndarray, wind
     to determine the glitch position (before or after the large frame-to-frame jump, switch).
     """
     data_len = len(diff_data_bool)
+    glitch_mask_hard = np.zeros(data_len)
     glitch_mask = np.zeros(data_len)
     glitch_switch = np.where(diff_data_bool == 1)[0]
+    glitch_switch_new = np.where(diff_data_bool == 1)[0]
+
+    threshold = 5
+    glitch_dur = np.diff(glitch_switch)
+    if np.any(glitch_dur < threshold):
+        small_glitch = np.where(glitch_dur < threshold)[0]
+        for i, val in enumerate(small_glitch):
+            glitch_mask_hard[glitch_switch[small_glitch[i]]:glitch_switch[small_glitch[i]+1]+1] = 1
+        glitch_switch_new = np.delete(glitch_switch, [small_glitch, small_glitch+1])
+
     previous_switch = 0
     next_switch = data_len - 1
-    for switch in glitch_switch:
+    for i, switch in enumerate(glitch_switch_new):
         before_switch = np.sum(repeating_val_mask[switch - window : switch])
         after_switch = np.sum(repeating_val_mask[switch : switch + window])
         left_zeros = after_switch > before_switch
@@ -81,6 +101,8 @@ def glitch_flag(diff_data_bool: np.ndarray, repeating_val_mask: np.ndarray, wind
             glitch_mask[previous_switch:switch] = 1
             glitch_mask[switch:next_switch] = 0
         previous_switch = switch
+
+    glitch_mask = glitch_mask + glitch_mask_hard
 
     return glitch_mask
 
@@ -169,18 +191,17 @@ def interpolate_corrupted_segments(
     non_corrupted_time_vector = time_vector[non_corrupted_mask]
     non_corrupted_data = data[non_corrupted_mask]
 
-    if corrupted_mask[0] == 0:
-        interpolator = PchipInterpolator(non_corrupted_time_vector, non_corrupted_data, extrapolate=True)
-        clean_data = interpolator(time_vector)
-    else:
-        # Fallback for leading corrupted samples
-        clean_data[time_vector < non_corrupted_time_vector[0]] = non_corrupted_data[1]
+    if len(non_corrupted_time_vector) >= 2:
+        interpolator = PchipInterpolator(non_corrupted_time_vector, non_corrupted_data, extrapolate=False)
+        clean_data = np.asarray(interpolator(time_vector))
+
+        clean_data[time_vector < non_corrupted_time_vector[0]] = non_corrupted_data[0]
         clean_data[time_vector > non_corrupted_time_vector[-1]] = non_corrupted_data[-1]
 
     return clean_data
 
 
-def clean_mocap_data(mocap_data, dt: float = DT_DEFAULT):
+def clean_mocap_data(mocap_data, subj_trial, dt: float = DT_DEFAULT):
     """
     Clean mocap marker trajectories by detecting and interpolating glitches.
     """
@@ -245,9 +266,9 @@ def clean_mocap_data(mocap_data, dt: float = DT_DEFAULT):
         cleaned.iloc[:, idx + 1] = interpolate_corrupted_segments(time_vector, data_Y, corrupted)
         cleaned.iloc[:, idx + 2] = interpolate_corrupted_segments(time_vector, data_Z, corrupted)
 
-        # plot_cleaned_data(data_X, cleaned.iloc[:, idx], time_vector, corrupted, (marker_name+'_X'))
-        # plot_cleaned_data(data_Y, cleaned.iloc[:, idx+1], time_vector, corrupted, (marker_name+'_Y'))
-        # plot_cleaned_data(data_Z, cleaned.iloc[:, idx+2], time_vector, corrupted, (marker_name+'_Z'))
+        plot_cleaned_data(data_X, cleaned.iloc[:, idx], time_vector, corrupted, (marker_name+'_X'), subj_trial)
+        plot_cleaned_data(data_Y, cleaned.iloc[:, idx+1], time_vector, corrupted, (marker_name+'_Y'), subj_trial)
+        plot_cleaned_data(data_Z, cleaned.iloc[:, idx+2], time_vector, corrupted, (marker_name+'_Z'), subj_trial)
 
     # plot_mocap_data_per_axes(time_vector, cleaned)
     return cleaned
