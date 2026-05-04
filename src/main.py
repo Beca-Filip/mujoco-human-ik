@@ -6,14 +6,15 @@ from mocap import load_mocap_data, apply_offsets, mm_to_meters, compute_axis_sca
 from filters import filter_marker_targets
 # from ik import ik_step_multi_site, solve_ik_for_frame
 # from ik_qp import solve_ik_for_frame
-from ik_symmetry import solve_ik_for_frame
+# from ik_symmetry import solve_ik_for_frame
+from ik_scipy import solve_ik_for_frame
 from visualization import simulation_qpos_trajectory, render_qpos_trajectory_to_video, compute_axis_limits, plot_skeleton_at_frame, plot_joint_trajectories
 from clear_data import clean_mocap_data
 from pathlib import Path
 import os
 import argparse
 from id import inverse_dynamics
-from generate_human_model import generate_human_model
+from generate_human_model_old import generate_human_model
 from detecting_corrupted_mocap import filter_markers_from_pairs, constant_values
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -64,7 +65,7 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     mocap_data = mm_to_meters(mocap_data)
 
     # ---------------- Clean data ---------------------
-    mocap_data = clean_mocap_data(mocap_data)
+    mocap_data = clean_mocap_data(mocap_data, subj_trail)
 
     # ---------------- Checking data ------------------
     problems, corr_flag = filter_markers_from_pairs(mocap_data, dev_threshold=0.3)
@@ -98,7 +99,7 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     y_limits = (y_min, y_max)
     z_limits = (z_min, z_max)
 
-    plot_skeleton_at_frame(mocap_data_avr, marker_names, subj_trail, save_plot_flag, frame_idx=10, x_limits=x_limits, y_limits=y_limits, z_limits=z_limits)
+    # plot_skeleton_at_frame(mocap_data_avr, marker_names, subj_trail, save_plot_flag, frame_idx=10, x_limits=x_limits, y_limits=y_limits, z_limits=z_limits)
 
     # plot_joint_trajectories(mocap_data, marker_names, x_limits, y_limits, z_limits)
 
@@ -127,6 +128,28 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
     all_site_names = [model.site(i).name for i in range(model.nsite)]
     if print_flag:
         print('Site names: \n', all_site_names)
+
+    # qpos_names = list(range(model.nq))
+    # name = ''
+    # for j in range(model.njnt):
+    #     start = model.jnt_qposadr[j]
+    #     if j < model.njnt - 1:
+    #         end = model.jnt_qposadr[j + 1]
+    #     else:
+    #         end = model.nq
+    #     for idx in range(model.nq):
+    #         if start <= idx < end:
+    #             name = model.joint(j).name
+    #             print(f"qpos index {idx} -> {name}")
+    #             if name == '':
+    #                 qpos_names[idx] = idx
+    #             else:
+    #                 qpos_names[idx] = name
+    # print(qpos_names)
+    # import csv
+    # with open("qpos_names.csv", "w", newline="") as f:
+    #     writer = csv.writer(f)
+    #     writer.writerow(qpos_names)
 
     # --------- MuJoCo sites to MoCap marker -----------
     mujoco_to_mocap = {
@@ -170,8 +193,8 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
                                                     x != 'under_maleollus_left' and x != 'under_maleollus_right')]
 
     sites_to_weights = {
-        "greater_trochanter_left": 1.0,
-        "greater_trochanter_right": 1.0,
+        "greater_trochanter_left": 5.0,
+        "greater_trochanter_right": 5.0,
         "lateral_femoral_epicondyle_left": 1.0,
         "lateral_femoral_epicondyle_right": 1.0,
         "lateral_maleollus_left": 2.0,
@@ -236,7 +259,7 @@ def main(mocap_path, model_path, out_joint_pos_path, output_video_path, output_x
             data,
             site_ids,
             filtered_targets.tolist(),
-            site_weights,
+            site_weights
         )
 
         qpos_trajectory[frame_idx] = data.qpos.copy()
